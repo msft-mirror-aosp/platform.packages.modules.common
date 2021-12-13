@@ -155,11 +155,12 @@ java_defaults {
         ":__subpackages__",
         "//frameworks/base/apex:__subpackages__",
         "//frameworks/base/libs/hwui",
-        // TODO: remove after moving connectivity to packages/modules
-        "//frameworks/base/packages/Connectivity:__subpackages__",
+        // TODO(b/208914639): remove after moving files to packages/modules/Connectivity
+        "//frameworks/base/packages/ConnectivityT:__subpackages__",
         "//frameworks/base/wifi",
         "//packages/modules:__subpackages__",
         "//packages/providers/MediaProvider:__subpackages__",
+        "//system/apex/apexd:__subpackages__",
     ],
 }
 
@@ -178,6 +179,7 @@ java_defaults {
         "//art/libartservice:__subpackages__",
         "//frameworks/base/apex:__subpackages__",
         "//packages/modules:__subpackages__",
+        "//system/apex/apexd:__subpackages__",
     ],
 }
 
