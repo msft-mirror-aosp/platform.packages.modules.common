@@ -522,6 +522,10 @@ MAINLINE_MODULES = [
         first_release=R,
     ),
     MainlineModule(
+        apex="com.android.uwb",
+        sdks=["uwb-module-sdk"],
+    ),
+    MainlineModule(
         apex="com.android.wifi",
         sdks=["wifi-module-sdk"],
         first_release=R,

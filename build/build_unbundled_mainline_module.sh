@@ -70,6 +70,7 @@ readonly -a DEFAULT_MODULES=(
   ExtServices
   NetworkPermissionConfig
   NetworkStack
+  NetworkStackNext
   PermissionController
 )
 
