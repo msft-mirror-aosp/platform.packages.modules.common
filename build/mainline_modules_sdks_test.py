@@ -14,11 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Unit tests for mainline_modules_sdks.py."""
+import re
 from pathlib import Path
 import os
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 import mainline_modules_sdks as mm
 
@@ -32,25 +34,30 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
     modules.
     """
 
-    def create_snapshot_file(self, name, version):
-        zip_file = Path(self.get_sdk_path(name, version))
+    @staticmethod
+    def create_sdk_library_files(z, name):
+        z.writestr(f"sdk_library/public/{name}-removed.txt", "")
+        z.writestr(f"sdk_library/public/{name}.srcjar", "")
+        z.writestr(f"sdk_library/public/{name}-stubs.jar", "")
+        z.writestr(f"sdk_library/public/{name}.txt", "")
+
+    def create_snapshot_file(self, out_dir, name, version):
+        zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name, version))
         with zipfile.ZipFile(zip_file, "w") as z:
             z.writestr("Android.bp", "")
             if name.endswith("-sdk"):
-                z.writestr("sdk_library/public/removed.txt", "")
-                z.writestr("sdk_library/public/source.srcjar", "")
-                z.writestr("sdk_library/public/lib.jar", "")
-                z.writestr("sdk_library/public/api.txt", "")
+                self.create_sdk_library_files(z, re.sub(r"-.*$", "", name))
 
-    def build_snapshots(self, sdk_versions, modules):
+    def build_snapshots(self, build_release, sdk_versions, modules):
         # Create input file structure.
-        sdks_out_dir = Path(self.get_mainline_sdks_path())
+        sdks_out_dir = Path(self.mainline_sdks_dir).joinpath("test")
         sdks_out_dir.mkdir(parents=True, exist_ok=True)
         # Create a fake sdk zip file for each module.
         for module in modules:
             for sdk in module.sdks:
                 for sdk_version in sdk_versions:
-                    self.create_snapshot_file(sdk, sdk_version)
+                    self.create_snapshot_file(sdks_out_dir, sdk, sdk_version)
+        return sdks_out_dir
 
 
 class TestProduceDist(unittest.TestCase):
@@ -66,6 +73,8 @@ class TestProduceDist(unittest.TestCase):
             modules = [
                 MAINLINE_MODULES_BY_APEX["com.android.art"],
                 MAINLINE_MODULES_BY_APEX["com.android.ipsec"],
+                # Create a google specific module.
+                mm.aosp_to_google(MAINLINE_MODULES_BY_APEX["com.android.wifi"]),
             ]
 
             subprocess_runner = mm.SubprocessRunner()
@@ -75,13 +84,21 @@ class TestProduceDist(unittest.TestCase):
                 out_dir=tmp_out_dir,
             )
 
+            build_releases = [
+                mm.Q,
+                mm.R,
+                mm.S,
+                mm.LATEST,
+                mm.LEGACY_BUILD_RELEASE,
+            ]
+
             producer = mm.SdkDistProducer(
                 subprocess_runner=subprocess_runner,
                 snapshot_builder=snapshot_builder,
                 dist_dir=tmp_dist_dir,
             )
 
-            producer.produce_dist(modules)
+            producer.produce_dist(modules, build_releases)
 
             files = []
             for abs_dir, _, filenames in os.walk(tmp_dist_dir):
@@ -89,23 +106,43 @@ class TestProduceDist(unittest.TestCase):
                 for f in filenames:
                     files.append(os.path.join(rel_dir, f))
             # pylint: disable=line-too-long
-            self.assertEqual([
-                "mainline-sdks/current/com.android.art/host-exports/art-module-host-exports-current.zip",
-                "mainline-sdks/current/com.android.art/sdk/art-module-sdk-current.zip",
-                "mainline-sdks/current/com.android.art/test-exports/art-module-test-exports-current.zip",
-                "mainline-sdks/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
-                "stubs/com.android.art/sdk_library/public/api.txt",
-                "stubs/com.android.art/sdk_library/public/lib.jar",
-                "stubs/com.android.art/sdk_library/public/removed.txt",
-                "stubs/com.android.art/sdk_library/public/source.srcjar",
-                "stubs/com.android.ipsec/sdk_library/public/api.txt",
-                "stubs/com.android.ipsec/sdk_library/public/lib.jar",
-                "stubs/com.android.ipsec/sdk_library/public/removed.txt",
-                "stubs/com.android.ipsec/sdk_library/public/source.srcjar",
-            ], sorted(files))
+            self.assertEqual(
+                [
+                    # Legacy copy of the snapshots, for use by tools that don't support build specific snapshots.
+                    "mainline-sdks/current/com.android.art/host-exports/art-module-host-exports-current.zip",
+                    "mainline-sdks/current/com.android.art/sdk/art-module-sdk-current.zip",
+                    "mainline-sdks/current/com.android.art/test-exports/art-module-test-exports-current.zip",
+                    "mainline-sdks/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                    "mainline-sdks/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
+                    # Build specific snapshots.
+                    "mainline-sdks/for-S-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
+                    "mainline-sdks/for-S-build/current/com.android.art/sdk/art-module-sdk-current.zip",
+                    "mainline-sdks/for-S-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
+                    "mainline-sdks/for-S-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                    "mainline-sdks/for-S-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
+                    "mainline-sdks/for-latest-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
+                    "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current.zip",
+                    "mainline-sdks/for-latest-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
+                    "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                    "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
+                    # Legacy stubs directory containing unpacked java_sdk_library artifacts.
+                    "stubs/com.android.art/sdk_library/public/art-removed.txt",
+                    "stubs/com.android.art/sdk_library/public/art-stubs.jar",
+                    "stubs/com.android.art/sdk_library/public/art.srcjar",
+                    "stubs/com.android.art/sdk_library/public/art.txt",
+                    "stubs/com.android.ipsec/sdk_library/public/ipsec-removed.txt",
+                    "stubs/com.android.ipsec/sdk_library/public/ipsec-stubs.jar",
+                    "stubs/com.android.ipsec/sdk_library/public/ipsec.srcjar",
+                    "stubs/com.android.ipsec/sdk_library/public/ipsec.txt",
+                    "stubs/com.google.android.wifi/sdk_library/public/wifi-removed.txt",
+                    "stubs/com.google.android.wifi/sdk_library/public/wifi-stubs.jar",
+                    "stubs/com.google.android.wifi/sdk_library/public/wifi.srcjar",
+                    "stubs/com.google.android.wifi/sdk_library/public/wifi.txt",
+                ],
+                sorted(files))
 
 
-def pathToTestData(relative_path):
+def path_to_test_data(relative_path):
     """Construct a path to a test data file.
 
     The relative_path is relative to the location of this file.
@@ -125,8 +162,8 @@ def pathToTestData(relative_path):
     return os.path.join(this_file_without_ext + "_data", relative_path)
 
 
-def readTestData(relative_path):
-    with open(pathToTestData(relative_path), "r") as f:
+def read_test_data(relative_path):
+    with open(path_to_test_data(relative_path), "r", encoding="utf8") as f:
         return f.read()
 
 
@@ -134,19 +171,19 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
 
     def apply_transformations(self, src, transformations, expected):
         producer = mm.SdkDistProducer(
-            subprocess_runner=None,
-            snapshot_builder=None,
+            subprocess_runner=mock.Mock(mm.SubprocessRunner),
+            snapshot_builder=mock.Mock(mm.SnapshotBuilder),
             script=self._testMethodName,
         )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = os.path.join(tmp_dir, "Android.bp")
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf8") as f:
                 f.write(src)
 
             mm.apply_transformations(producer, tmp_dir, transformations)
 
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf8") as f:
                 result = f.read()
 
         self.maxDiff = None
@@ -159,9 +196,9 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
         that the correct Soong config module types and variables are used and
         that it imports the definitions from the correct location.
         """
-        src = readTestData("ipsec_Android.bp.input")
+        src = read_test_data("ipsec_Android.bp.input")
 
-        expected = readTestData("ipsec_Android.bp.expected")
+        expected = read_test_data("ipsec_Android.bp.expected")
 
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations()
@@ -175,9 +212,9 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
         common mainline modules. This checks that the ART specific Soong config
         module types, variable and imports are used.
         """
-        src = readTestData("art_Android.bp.input")
+        src = read_test_data("art_Android.bp.input")
 
-        expected = readTestData("art_Android.bp.expected")
+        expected = read_test_data("art_Android.bp.expected")
 
         module = MAINLINE_MODULES_BY_APEX["com.android.art"]
         transformations = module.transformations()
