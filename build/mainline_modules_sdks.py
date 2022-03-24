@@ -487,6 +487,11 @@ class MainlineModule:
 # List of mainline modules.
 MAINLINE_MODULES = [
     MainlineModule(
+        apex="com.android.adservices",
+        sdks=["adservices-module-sdk"],
+        first_release=Tiramisu,
+    ),
+    MainlineModule(
         apex="com.android.art",
         sdks=[
             "art-module-sdk",
@@ -527,6 +532,11 @@ MAINLINE_MODULES = [
         first_release=R,
     ),
     MainlineModule(
+        apex="com.android.ondevicepersonalization",
+        sdks=["ondevicepersonalization-module-sdk"],
+        first_release=Tiramisu,
+    ),
+    MainlineModule(
         apex="com.android.permission",
         sdks=["permission-module-sdk"],
         first_release=R,
@@ -549,6 +559,10 @@ MAINLINE_MODULES = [
         apex="com.android.tethering",
         sdks=["tethering-module-sdk"],
         first_release=R,
+    ),
+    MainlineModule(
+        apex="com.android.uwb",
+        sdks=["uwb-module-sdk"],
     ),
     MainlineModule(
         apex="com.android.wifi",
