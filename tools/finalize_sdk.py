@@ -16,6 +16,7 @@ from pathlib import Path
 # See go/fetch_artifact for details on this script.
 FETCH_ARTIFACT = '/google/data/ro/projects/android/fetch_artifact'
 COMPAT_REPO = Path('prebuilts/sdk')
+COMPAT_README = Path('extensions/README.md')
 # This build target is used when fetching from a train build (TXXXXXXXX)
 BUILD_TARGET_TRAIN = 'train_build'
 # This build target is used when fetching from a non-train build (XXXXXXXX)
@@ -81,6 +82,7 @@ if not os.path.isdir('build/soong'):
 parser = argparse.ArgumentParser(description=('Finalize an extension SDK with prebuilts'))
 parser.add_argument('-f', '--finalize_sdk', type=int, required=True, help='The numbered SDK to finalize.')
 parser.add_argument('-b', '--bug', type=int, required=True, help='The bug number to add to the commit message.')
+parser.add_argument('-r', '--readme', required=True, help='Version history entry to add to %s' % (COMPAT_REPO / COMPAT_README))
 parser.add_argument('-a', '--amend_last_commit', action="store_true", help='Amend current HEAD commits instead of making new commits.')
 parser.add_argument('-m', '--modules', action='append', help='Modules to include. Can be provided multiple times, or not at all for all modules.')
 parser.add_argument('bid', help='Build server build ID')
@@ -90,9 +92,7 @@ build_target = BUILD_TARGET_TRAIN if args.bid[0] == 'T' else BUILD_TARGET_CONTIN
 branch_name = 'finalize-%d' % args.finalize_sdk
 cmdline = " ".join([x for x in sys.argv if x not in ['-a', '--amend_last_commit']])
 commit_message = COMMIT_TEMPLATE % (args.finalize_sdk, args.bid, cmdline, args.bug)
-module_names = args.modules
-if not module_names:
-    module_names = ['*']
+module_names = args.modules or ['*']
 
 compat_dir = COMPAT_REPO.joinpath('extensions/%d' % args.finalize_sdk)
 if compat_dir.is_dir():
@@ -112,8 +112,8 @@ for m in module_names:
         with zipfile.ZipFile(tmpdir.joinpath(f)) as zipFile:
             zipFile.extractall(target_dir)
 
-        # Just capture the artifacts, not the bp files of finalized versions
-        os.remove(target_dir.joinpath('Android.bp'))
+        # Disable the Android.bp, but keep it for reference / potential future use.
+        shutil.move(target_dir.joinpath('Android.bp'), target_dir.joinpath('Android.bp.auto'))
 
         print('Created %s' % target_dir)
         created_dirs[repo].add(dir)
@@ -132,6 +132,12 @@ print('Running git commit')
 for repo in created_dirs:
     git = ['git', '-C', str(repo)]
     subprocess.check_output(git + ['add'] + list(created_dirs[repo]))
+
+    if repo == COMPAT_REPO:
+        with open(COMPAT_REPO / COMPAT_README, "a") as readme:
+            readme.write(f"- {args.finalize_sdk}: {args.readme}\n")
+        subprocess.check_output(git + ['add', COMPAT_README])
+
     if args.amend_last_commit:
         change_id = '\n' + re.search(r'Change-Id: [^\\n]+', str(subprocess.check_output(git + ['log', '-1']))).group(0)
         subprocess.check_output(git + ['commit', '--amend', '-m', commit_message + change_id])
