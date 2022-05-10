@@ -44,7 +44,8 @@ readonly -a DEFAULT_MODULES=(
   com.android.conscrypt
   com.android.extservices
   com.android.i18n
-  com.android.ipsec
+  # TODO(b/210694291): include ipsec module in the build
+  # com.android.ipsec
   com.android.media
   com.android.mediaprovider
   com.android.media.swcodec
@@ -54,8 +55,10 @@ readonly -a DEFAULT_MODULES=(
   com.android.resolv
   com.android.runtime
   com.android.sdkext
+  com.android.sepolicy
   com.android.telephony
-  com.android.tethering
+  # TODO(b/210694291): include tethering module in the build
+  # com.android.tethering
   com.android.tzdata
   com.android.wifi
   test1_com.android.tzdata
@@ -65,7 +68,6 @@ readonly -a DEFAULT_MODULES=(
   CaptivePortalLogin
   DocumentsUI
   ExtServices
-  NetworkPermissionConfig
   NetworkStack
   NetworkStackNext
   PermissionController
@@ -118,8 +120,10 @@ function init() {
 
   # This script cannot handle compressed apexes
   declare -grx OVERRIDE_PRODUCT_COMPRESSED_APEX=false
-  # Unset to build using PreBuilt SDK.
-  declare -grx UNBUNDLED_BUILD_SDKS_FROM_SOURCE=true
+
+  # UNBUNDLED_BUILD_SDKS_FROM_SOURCE defaults to false, which is necessary to
+  # use prebuilt SDKs on thin branches that may not have the sources (e.g.
+  # frameworks/base).
 }
 
 function main() {
