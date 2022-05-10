@@ -673,6 +673,16 @@ class BundledMainlineModule(MainlineModule):
 # List of mainline modules.
 MAINLINE_MODULES = [
     MainlineModule(
+        apex="com.android.adservices",
+        sdks=["adservices-module-sdk"],
+        first_release=Tiramisu,
+    ),
+    MainlineModule(
+        apex="com.android.appsearch",
+        sdks=["appsearch-sdk"],
+        first_release=Tiramisu,
+    ),
+    MainlineModule(
         apex="com.android.art",
         sdks=[
             "art-module-sdk",
@@ -729,6 +739,11 @@ MAINLINE_MODULES = [
         ]),
     ),
     MainlineModule(
+        apex="com.android.ondevicepersonalization",
+        sdks=["ondevicepersonalization-module-sdk"],
+        first_release=Tiramisu,
+    ),
+    MainlineModule(
         apex="com.android.permission",
         sdks=["permission-module-sdk"],
         first_release=R,
@@ -766,6 +781,10 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-tethering"),
         ]),
+    ),
+    MainlineModule(
+        apex="com.android.uwb",
+        sdks=["uwb-module-sdk"],
     ),
     MainlineModule(
         apex="com.android.wifi",
