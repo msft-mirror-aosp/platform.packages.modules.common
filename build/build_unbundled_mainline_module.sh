@@ -68,8 +68,8 @@ readonly -a DEFAULT_MODULES=(
   CaptivePortalLogin
   DocumentsUI
   ExtServices
-  NetworkPermissionConfig
   NetworkStack
+  NetworkStackNext
   PermissionController
 )
 
