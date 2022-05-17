@@ -485,36 +485,6 @@ def create_latest_sdk_snapshots(build_release: BuildRelease,
     producer.produce_bundled_dist_for_build_release(build_release, modules)
 
 
-def create_legacy_dist_structures(build_release: BuildRelease,
-                                  producer: "SdkDistProducer",
-                                  modules: List["MainlineModule"]):
-    """Creates legacy file structures."""
-
-    # Only put unbundled modules in the legacy dist and stubs structures.
-    modules = [m for m in modules if not m.is_bundled()]
-
-    snapshots_dir = producer.produce_unbundled_dist_for_build_release(
-        build_release, modules)
-
-    # Create the out/dist/mainline-sdks/stubs structure.
-    # TODO(b/199759953): Remove stubs once it is no longer used by gantry.
-    # Clear and populate the stubs directory.
-    dist_dir = producer.dist_dir
-    stubs_dir = os.path.join(dist_dir, "stubs")
-    shutil.rmtree(stubs_dir, ignore_errors=True)
-
-    for module in modules:
-        apex = module.apex
-        dest_dir = os.path.join(dist_dir, "stubs", apex)
-        for sdk in module.sdks:
-            # If the sdk's name ends with -sdk then extract sdk library
-            # related files from its zip file.
-            if sdk.endswith("-sdk"):
-                sdk_file = sdk_snapshot_zip_file(snapshots_dir, sdk, "current")
-                extract_matching_files_from_zip(sdk_file, dest_dir,
-                                                sdk_library_files_pattern())
-
-
 Q = BuildRelease(
     name="Q",
     # At the moment we do not generate a snapshot for Q.
@@ -546,25 +516,10 @@ Tiramisu = BuildRelease(
 # before LATEST.
 
 # The build release for the latest build supported by this build, i.e. the
-# current build. This must be the last BuildRelease defined in this script,
-# before LEGACY_BUILD_RELEASE.
+# current build. This must be the last BuildRelease defined in this script.
 LATEST = BuildRelease(
     name="latest",
     creator=create_latest_sdk_snapshots,
-    # There are no build release specific environment variables to pass to
-    # Soong.
-    soong_env={},
-)
-
-# The build release to populate the legacy dist structure that does not specify
-# a particular build release. This MUST come after LATEST so that it includes
-# all the modules for which sdk snapshot source is available.
-LEGACY_BUILD_RELEASE = BuildRelease(
-    name="legacy",
-    # There is no build release specific sub directory.
-    sub_dir="",
-    # Create snapshots needed for legacy tools.
-    creator=create_legacy_dist_structures,
     # There are no build release specific environment variables to pass to
     # Soong.
     soong_env={},
@@ -611,11 +566,7 @@ class MainlineModule:
     #       source was first included. So, a module that was added in build T
     #       could potentially be used in an S release and so its SDK will need
     #       to be made available for S builds.
-    #
-    # Defaults to the latest build, i.e. the build on which this script is run
-    # as the snapshot is assumed to be needed in the build containing the sdk
-    # source.
-    first_release: BuildRelease = LATEST
+    first_release: BuildRelease
 
     # The configuration variable, defaults to ANDROID:module_build_from_source
     configVar: ConfigVar = ConfigVar(
@@ -660,6 +611,10 @@ class BundledMainlineModule(MainlineModule):
     A bundled module is always preloaded into the platform images.
     """
 
+    # Defaults to the latest build, i.e. the build on which this script is run
+    # as bundled modules are, by definition, only needed in this build.
+    first_release: BuildRelease = LATEST
+
     def is_bundled(self):
         return True
 
@@ -697,6 +652,11 @@ MAINLINE_MODULES = [
         ),
         configBpDefFile="prebuilts/module_sdk/art/SoongConfig.bp",
         configModuleTypePrefix="art_prebuilt_",
+    ),
+    MainlineModule(
+        apex="com.android.bluetooth",
+        sdks=["bluetooth-module-sdk"],
+        first_release=Tiramisu,
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -757,6 +717,7 @@ MAINLINE_MODULES = [
     MainlineModule(
         apex="com.android.scheduling",
         sdks=["scheduling-sdk"],
+        first_release=S,
     ),
     MainlineModule(
         apex="com.android.sdkext",
@@ -785,6 +746,7 @@ MAINLINE_MODULES = [
     MainlineModule(
         apex="com.android.uwb",
         sdks=["uwb-module-sdk"],
+        first_release=Tiramisu,
     ),
     MainlineModule(
         apex="com.android.wifi",
@@ -796,7 +758,7 @@ MAINLINE_MODULES = [
     ),
 ]
 
-# List of Mainline modules that currently are never built unbundled. They should
+# List of Mainline modules that currently are never built unbundled. They must
 # not specify first_release, and they don't have com.google.android
 # counterparts.
 BUNDLED_MAINLINE_MODULES = [
