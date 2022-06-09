@@ -111,6 +111,11 @@ java_defaults {
     // Collates API usages from each module for further analysis.
     plugins: ["java_api_finder"],
 
+    // Disallow disabling the NewApi lint check.
+    lint: {
+        strict_updatability_linting: true,
+    },
+
     dist_group: "android",
 }
 
@@ -206,6 +211,29 @@ apex_defaults {
     min_sdk_version: "30",
     updatable: true,
     defaults_visibility: ["//visibility:public"],
+}
+
+DCLA_MIN_SDK_VERSION = "31"
+
+soong_config_module_type_import {
+    from: "system/apex/Android.bp",
+    module_types: ["library_linking_strategy_apex_defaults"],
+}
+
+library_linking_strategy_apex_defaults {
+    name: "r-launched-dcla-enabled-apex-module",
+    defaults_visibility: ["//packages/modules/adb:__subpackages__"],
+    defaults: ["r-launched-apex-module"],
+    soong_config_variables: {
+        library_linking_strategy: {
+            // Use the R min_sdk_version
+            prefer_static: {},
+            // Override the R min_sdk_version to min_sdk_version that supports dcla
+            conditions_default: {
+                min_sdk_version: DCLA_MIN_SDK_VERSION,
+            },
+        },
+    },
 }
 
 apex_defaults {
