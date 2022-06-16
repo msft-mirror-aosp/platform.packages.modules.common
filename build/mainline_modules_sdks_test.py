@@ -15,7 +15,6 @@
 # limitations under the License.
 """Unit tests for mainline_modules_sdks.py."""
 import dataclasses
-import pathlib
 import re
 import typing
 from pathlib import Path
@@ -48,7 +47,8 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
         z.writestr(f"sdk_library/public/{name}-removed.txt", "")
         z.writestr(f"sdk_library/public/{name}.srcjar", "")
         z.writestr(f"sdk_library/public/{name}-stubs.jar", "")
-        z.writestr(f"sdk_library/public/{name}.txt", "")
+        z.writestr(f"sdk_library/public/{name}.txt",
+                   "method public int testMethod(int);")
 
     def create_snapshot_file(self, out_dir, name, version, for_r_build):
         zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name, version))
@@ -74,6 +74,63 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                     self.create_snapshot_file(sdks_out_dir, sdk, sdk_version,
                                               module.for_r_build)
         return sdks_out_dir
+
+    def get_art_module_info_file_data(self, sdk):
+        info_file_data = f"""[
+  {{
+    "@type": "java_sdk_library",
+    "@name": "art.module.public.api",
+    "@deps": [
+      "libcore_license"
+    ],
+    "dist_stem": "art",
+    "scopes": {{
+      "public": {{
+        "current_api": "sdk_library/public/{re.sub(r"-.*$", "", sdk)}.txt",
+        "latest_api": "{Path(self.mainline_sdks_dir).joinpath("test")}/prebuilts/sdk/art.api.public.latest/gen/art.api.public.latest",
+        "latest_removed_api": "{Path(self.mainline_sdks_dir).joinpath("test")}/prebuilts/sdk/art-removed.api.public.latest/gen/art-removed.api.public.latest",
+        "removed_api": "sdk_library/public/{re.sub(r"-.*$", "", sdk)}-removed.txt"
+      }}
+    }}
+  }}
+]
+"""
+        return info_file_data
+
+    @staticmethod
+    def write_data_to_file(file, data):
+        with open(file, "w") as file:
+            file.write(data)
+
+    def create_snapshot_info_file(self, module, sdk_info_file, sdk):
+        if module == MAINLINE_MODULES_BY_APEX["com.android.art"]:
+            self.write_data_to_file(sdk_info_file,
+                                    self.get_art_module_info_file_data(sdk))
+        else:
+            # For rest of the modules, generate an empty .info file.
+            self.write_data_to_file(sdk_info_file, "[]")
+
+    def build_sdk_scope_targets(self, build_release, sdk_version, modules):
+        target_paths = []
+        target_dict = dict()
+        for module in modules:
+            for sdk in module.sdks:
+                if "host-exports" in sdk or "test-exports" in sdk:
+                    continue
+
+                sdk_info_file = mm.sdk_snapshot_info_file(
+                    Path(self.mainline_sdks_dir).joinpath("test"), sdk,
+                    sdk_version)
+                self.create_snapshot_info_file(module, sdk_info_file, sdk)
+                paths, dict_item = self.latest_api_file_targets(sdk_info_file)
+                target_paths.extend(paths)
+                target_dict[sdk_info_file] = dict_item
+
+        for target_path in target_paths:
+            os.makedirs(os.path.split(target_path)[0])
+            self.write_data_to_file(target_path, "")
+
+        return target_dict
 
 
 class TestProduceDist(unittest.TestCase):
@@ -128,19 +185,12 @@ class TestProduceDist(unittest.TestCase):
             mm.R,
             mm.S,
             mm.LATEST,
-            mm.LEGACY_BUILD_RELEASE,
         ]
         self.produce_dist(modules, build_releases)
 
         # pylint: disable=line-too-long
         self.assertEqual(
             [
-                # Legacy copy of the snapshots, for use by tools that don't support build specific snapshots.
-                "mainline-sdks/current/com.android.art/host-exports/art-module-host-exports-current.zip",
-                "mainline-sdks/current/com.android.art/sdk/art-module-sdk-current.zip",
-                "mainline-sdks/current/com.android.art/test-exports/art-module-test-exports-current.zip",
-                "mainline-sdks/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
-                "mainline-sdks/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
                 # Build specific snapshots.
                 "mainline-sdks/for-R-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
                 "mainline-sdks/for-R-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
@@ -150,23 +200,13 @@ class TestProduceDist(unittest.TestCase):
                 "mainline-sdks/for-S-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
                 "mainline-sdks/for-S-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
-                # Legacy stubs directory containing unpacked java_sdk_library artifacts.
-                "stubs/com.android.art/sdk_library/public/art-removed.txt",
-                "stubs/com.android.art/sdk_library/public/art-stubs.jar",
-                "stubs/com.android.art/sdk_library/public/art.srcjar",
-                "stubs/com.android.art/sdk_library/public/art.txt",
-                "stubs/com.android.ipsec/sdk_library/public/android.net.ipsec.ike-removed.txt",
-                "stubs/com.android.ipsec/sdk_library/public/android.net.ipsec.ike-stubs.jar",
-                "stubs/com.android.ipsec/sdk_library/public/android.net.ipsec.ike.srcjar",
-                "stubs/com.android.ipsec/sdk_library/public/android.net.ipsec.ike.txt",
-                "stubs/com.google.android.wifi/sdk_library/public/framework-wifi-removed.txt",
-                "stubs/com.google.android.wifi/sdk_library/public/framework-wifi-stubs.jar",
-                "stubs/com.google.android.wifi/sdk_library/public/framework-wifi.srcjar",
-                "stubs/com.google.android.wifi/sdk_library/public/framework-wifi.txt",
             ],
             sorted(self.list_files_in_dir(self.tmp_dist_dir)))
 
@@ -241,34 +281,20 @@ class TestProduceDist(unittest.TestCase):
                 "bundled-mainline-sdks/platform-mainline/test-exports/platform-mainline-test-exports-current.zip",
                 # Unbundled (normal) modules.
                 "mainline-sdks/for-latest-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
             ],
             sorted(self.list_files_in_dir(self.tmp_dist_dir)))
 
-    def test_legacy_release(self):
-        modules = [
-            MAINLINE_MODULES_BY_APEX["com.android.art"],  # An unnbundled module
-            MAINLINE_MODULES_BY_APEX["com.android.runtime"],  # A bundled module
-            MAINLINE_MODULES_BY_APEX["platform-mainline"],  # Platform SDK
-        ]
-        build_releases = [mm.LEGACY_BUILD_RELEASE]
-        self.produce_dist(modules, build_releases)
-
-        # pylint: disable=line-too-long
-        self.assertEqual(
-            [
-                # Legacy copy of the snapshots.
-                "mainline-sdks/current/com.android.art/host-exports/art-module-host-exports-current.zip",
-                "mainline-sdks/current/com.android.art/sdk/art-module-sdk-current.zip",
-                "mainline-sdks/current/com.android.art/test-exports/art-module-test-exports-current.zip",
-                # Legacy stubs directory containing unpacked java_sdk_library artifacts.
-                "stubs/com.android.art/sdk_library/public/art-removed.txt",
-                "stubs/com.android.art/sdk_library/public/art-stubs.jar",
-                "stubs/com.android.art/sdk_library/public/art.srcjar",
-                "stubs/com.android.art/sdk_library/public/art.txt",
-            ],
-            sorted(self.list_files_in_dir(self.tmp_dist_dir)))
+        art_api_diff_file = os.path.join(
+            self.tmp_dist_dir,
+            "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt"
+        )
+        self.assertNotEqual(
+            os.path.getsize(art_api_diff_file),
+            0,
+            msg="Api diff file should not be empty for the art module")
 
     def create_build_number_file(self):
         soong_dir = os.path.join(self.tmp_out_dir, "soong")
@@ -305,7 +331,6 @@ class TestProduceDist(unittest.TestCase):
             mm.R,
             mm.S,
             mm.LATEST,
-            mm.LEGACY_BUILD_RELEASE,
         ]
 
         producer.produce_dist(modules, build_releases)
@@ -320,15 +345,6 @@ class TestProduceDist(unittest.TestCase):
             ),
             (
                 "latest",
-                {},
-                ["current"],
-                [
-                    "com.android.art", "com.android.ipsec",
-                    "com.google.android.wifi"
-                ],
-            ),
-            (
-                "legacy",
                 {},
                 ["current"],
                 [
