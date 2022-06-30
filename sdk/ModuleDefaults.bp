@@ -111,6 +111,11 @@ java_defaults {
     // Collates API usages from each module for further analysis.
     plugins: ["java_api_finder"],
 
+    // Disallow disabling the NewApi lint check.
+    lint: {
+        strict_updatability_linting: true,
+    },
+
     dist_group: "android",
 }
 
@@ -132,8 +137,6 @@ java_defaults {
         ":__subpackages__",
         "//frameworks/base/apex:__subpackages__",
         "//frameworks/base/libs/hwui",
-        // TODO(b/208914639): remove after moving files to packages/modules/Connectivity
-        "//frameworks/base/packages/ConnectivityT:__subpackages__",
         "//frameworks/base/wifi",
         "//packages/modules:__subpackages__",
         "//packages/providers/MediaProvider:__subpackages__",
@@ -192,4 +195,60 @@ java_defaults {
         targets: ["sdk"],
         dir: "apistubs/android/system-server",
     },
+}
+
+// These apex_defaults serve as a common place to add properties which should
+// affect all mainline modules.
+apex_defaults {
+    name: "q-launched-apex-module",
+    min_sdk_version: "29",
+    updatable: true,
+    defaults_visibility: ["//visibility:public"],
+}
+
+apex_defaults {
+    name: "r-launched-apex-module",
+    min_sdk_version: "30",
+    updatable: true,
+    defaults_visibility: ["//visibility:public"],
+}
+
+DCLA_MIN_SDK_VERSION = "31"
+
+soong_config_module_type_import {
+    from: "system/apex/Android.bp",
+    module_types: ["library_linking_strategy_apex_defaults"],
+}
+
+library_linking_strategy_apex_defaults {
+    name: "r-launched-dcla-enabled-apex-module",
+    defaults_visibility: ["//packages/modules/adb:__subpackages__"],
+    defaults: ["r-launched-apex-module"],
+    soong_config_variables: {
+        library_linking_strategy: {
+            // Use the R min_sdk_version
+            prefer_static: {},
+            // Override the R min_sdk_version to min_sdk_version that supports dcla
+            conditions_default: {
+                min_sdk_version: DCLA_MIN_SDK_VERSION,
+            },
+        },
+    },
+}
+
+apex_defaults {
+    name: "s-launched-apex-module",
+    min_sdk_version: "31",
+    updatable: true,
+    defaults_visibility: [
+        "//art:__subpackages__",
+        "//packages/modules:__subpackages__",
+    ],
+}
+
+apex_defaults {
+    name: "t-launched-apex-module",
+    min_sdk_version: "Tiramisu",
+    updatable: true,
+    defaults_visibility: ["//packages/modules:__subpackages__"],
 }
