@@ -16,12 +16,13 @@ from pathlib import Path
 # See go/fetch_artifact for details on this script.
 FETCH_ARTIFACT = '/google/data/ro/projects/android/fetch_artifact'
 COMPAT_REPO = Path('prebuilts/sdk')
+COMPAT_README = Path('extensions/README.md')
 # This build target is used when fetching from a train build (TXXXXXXXX)
 BUILD_TARGET_TRAIN = 'train_build'
 # This build target is used when fetching from a non-train build (XXXXXXXX)
 BUILD_TARGET_CONTINUOUS = 'mainline_modules-user'
 # The glob of sdk artifacts to fetch
-ARTIFACT_PATTERN = 'mainline-sdks/current/{module_name}/sdk/*.zip'
+ARTIFACT_PATTERN = 'mainline-sdks/for-latest-build/current/{module_name}/sdk/*.zip'
 COMMIT_TEMPLATE = """Finalize artifacts for extension SDK %d
 
 Import from build id %s.
@@ -81,6 +82,7 @@ if not os.path.isdir('build/soong'):
 parser = argparse.ArgumentParser(description=('Finalize an extension SDK with prebuilts'))
 parser.add_argument('-f', '--finalize_sdk', type=int, required=True, help='The numbered SDK to finalize.')
 parser.add_argument('-b', '--bug', type=int, required=True, help='The bug number to add to the commit message.')
+parser.add_argument('-r', '--readme', required=True, help='Version history entry to add to %s' % (COMPAT_REPO / COMPAT_README))
 parser.add_argument('-a', '--amend_last_commit', action="store_true", help='Amend current HEAD commits instead of making new commits.')
 parser.add_argument('-m', '--modules', action='append', help='Modules to include. Can be provided multiple times, or not at all for all modules.')
 parser.add_argument('bid', help='Build server build ID')
@@ -130,6 +132,12 @@ print('Running git commit')
 for repo in created_dirs:
     git = ['git', '-C', str(repo)]
     subprocess.check_output(git + ['add'] + list(created_dirs[repo]))
+
+    if repo == COMPAT_REPO:
+        with open(COMPAT_REPO / COMPAT_README, "a") as readme:
+            readme.write(f"- {args.finalize_sdk}: {args.readme}\n")
+        subprocess.check_output(git + ['add', COMPAT_README])
+
     if args.amend_last_commit:
         change_id = '\n' + re.search(r'Change-Id: [^\\n]+', str(subprocess.check_output(git + ['log', '-1']))).group(0)
         subprocess.check_output(git + ['commit', '--amend', '-m', commit_message + change_id])
