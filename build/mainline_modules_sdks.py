@@ -20,6 +20,7 @@ the APEXes in it are built, otherwise all configured SDKs are built.
 """
 import argparse
 import dataclasses
+import datetime
 import functools
 import io
 import json
@@ -255,6 +256,22 @@ def sdk_snapshot_api_diff_file(snapshots_dir, sdk_name, sdk_version):
     return os.path.join(snapshots_dir, f"{sdk_name}-{sdk_version}-api-diff.txt")
 
 
+# The default time to use in zip entries. Ideally, this should be the same as is
+# used by soong_zip and ziptime but there is no strict need for that to be the
+# case. What matters is this is a fixed time so that the contents of zip files
+# created by this script do not depend on when it is run, only the inputs.
+default_zip_time = datetime.datetime(2008, 1, 1, 0, 0, 0, 0,
+                                     datetime.timezone.utc)
+
+
+# set the timestamps of the paths to the default_zip_time.
+def set_default_timestamp(base_dir, paths):
+    for path in paths:
+        timestamp = default_zip_time.timestamp()
+        p = os.path.join(base_dir, path)
+        os.utime(p, (timestamp, timestamp))
+
+
 @dataclasses.dataclass()
 class SnapshotBuilder:
     """Builds sdk snapshots"""
@@ -409,6 +426,13 @@ java_sdk_library_import {{
                     dest_dir, "snapshot-creation-build-number.txt")
                 shutil.copy(build_number_file, snapshot_build_number_file)
 
+            # Make sure that all the paths being added to the zip file have a
+            # fixed timestamp so that the contents of the zip file do not depend
+            # on when this script is run, only the inputs.
+            for root, dirs, files in os.walk(dest_dir):
+                set_default_timestamp(root, dirs)
+                set_default_timestamp(root, files)
+
             # Now zip up the files into a snapshot zip file.
             base_file = os.path.join(r_snapshot_dir, sdk_name + "-current")
             shutil.make_archive(base_file, "zip", dest_dir)
@@ -417,10 +441,7 @@ java_sdk_library_import {{
 
     @staticmethod
     def does_sdk_library_support_latest_api(sdk_library):
-        # TODO(b/235330409): remove service art from the exception list once
-        # this bug is fixed.
-        if sdk_library == "service-art" or \
-            sdk_library == "conscrypt.module.platform.api":
+        if sdk_library == "conscrypt.module.platform.api":
             return False
         return True
 
@@ -739,6 +760,19 @@ class MainlineModule:
     #
     # This field records the last build release in which they are optional. It
     # defaults to None which indicates that the module was never optional.
+    #
+    # TODO(b/238203992): remove the following warning once all modules can be
+    #  treated as optional at build time.
+    #
+    # DO NOT use this attr for anything other than controlling whether the
+    # generated snapshot uses its own Soong config variable or the common one.
+    # That is because this is being temporarily used to force Permission to have
+    # its own Soong config variable even though Permission is not actually
+    # optional at runtime on a GMS capable device.
+    #
+    # b/238203992 will make all modules have their own Soong config variable by
+    # default at which point this will no longer be needed on Permission and so
+    # it can be used to indicate that a module is optional at runtime.
     last_optional_release: typing.Optional[BuildRelease] = None
 
     # The short name for the module.
@@ -903,6 +937,11 @@ MAINLINE_MODULES = [
             # that are provided in R by non-updatable parts of the
             # bootclasspath.
         ]),
+        # Although Permission is not, and has never been, optional for GMS
+        # capable devices it does need to be treated as optional at build time
+        # when building non-GMS devices.
+        # TODO(b/238203992): remove once all modules are optional at build time.
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.scheduling",
@@ -1212,6 +1251,12 @@ def copy_zip_and_replace(producer, src_zip_path, dest_zip_path, src_dir, paths):
     # not affected by a change of directory.
     abs_src_zip_path = os.path.abspath(src_zip_path)
     abs_dest_zip_path = os.path.abspath(dest_zip_path)
+
+    # Make sure that all the paths being added to the zip file have a fixed
+    # timestamp so that the contents of the zip file do not depend on when this
+    # script is run, only the inputs.
+    set_default_timestamp(src_dir, paths)
+
     producer.subprocess_runner.run(
         ["zip", "-q", abs_src_zip_path, "--out", abs_dest_zip_path] + paths,
         # Change into the source directory before running zip.
