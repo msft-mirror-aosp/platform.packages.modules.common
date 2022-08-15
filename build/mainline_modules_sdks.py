@@ -20,6 +20,8 @@ the APEXes in it are built, otherwise all configured SDKs are built.
 """
 import argparse
 import dataclasses
+import datetime
+import enum
 import functools
 import io
 import json
@@ -71,12 +73,35 @@ class FileTransformation:
     path: str
 
     def apply(self, producer, path):
-        """Apply the transformation to the src_path to produce the dest_path."""
+        """Apply the transformation to the path; changing it in place."""
+        with open(path, "r+", encoding="utf8") as file:
+            self._apply_transformation(producer, file)
+
+    def _apply_transformation(self, producer, file):
+        """Apply the transformation to the file.
+
+        The file has been opened in read/write mode so the implementation of
+        this must read the contents and then reset the file to the beginning
+        and write the altered contents.
+        """
         raise NotImplementedError
 
 
 @dataclasses.dataclass(frozen=True)
-class SoongConfigBoilerplateInserter(FileTransformation):
+class SoongConfigVarTransformation(FileTransformation):
+
+    # The configuration variable that will control the prefer setting.
+    configVar: ConfigVar
+
+    # The line containing the prefer property.
+    PREFER_LINE = "    prefer: false,"
+
+    def _apply_transformation(self, producer, file):
+        raise NotImplementedError
+
+
+@dataclasses.dataclass(frozen=True)
+class SoongConfigBoilerplateInserter(SoongConfigVarTransformation):
     """Transforms an Android.bp file to add soong config boilerplate.
 
     The boilerplate allows the prefer setting of the modules to be controlled
@@ -86,12 +111,11 @@ class SoongConfigBoilerplateInserter(FileTransformation):
     # The configuration variable that will control the prefer setting.
     configVar: ConfigVar
 
-    # The bp file containing the definitions of the configuration module types
-    # to use in the sdk.
-    configBpDefFile: str
-
     # The prefix to use for the soong config module types.
     configModuleTypePrefix: str
+
+    def config_module_type(self, module_type):
+        return self.configModuleTypePrefix + module_type
 
     def apply(self, producer, path):
         with open(path, "r+", encoding="utf8") as file:
@@ -143,7 +167,7 @@ class SoongConfigBoilerplateInserter(FileTransformation):
                 # unversioned relies on the fact that the unversioned modules
                 # set "prefer: false", while the versioned modules do not. That
                 # is a little bit fragile so may require some additional checks.
-                if module_line != "    prefer: false,":
+                if module_line != self.PREFER_LINE:
                     # The line does not indicate that the module needs the
                     # soong config boilerplate so add the line and skip to the
                     # next one.
@@ -169,7 +193,7 @@ class SoongConfigBoilerplateInserter(FileTransformation):
 
                 # Change the module type to the corresponding soong config
                 # module type by adding the prefix.
-                module_type = self.configModuleTypePrefix + module_type
+                module_type = self.config_module_type(module_type)
 
             # Generate the module, possibly with the new module type and
             # containing the soong config variables entry.
@@ -177,32 +201,14 @@ class SoongConfigBoilerplateInserter(FileTransformation):
             content_lines.extend(module_content)
             content_lines.append("}")
 
-        if self.configBpDefFile:
-            # Add the soong_config_module_type_import module definition that
-            # imports the soong config module types into this bp file to the
-            # header lines so that they appear before any uses.
-            module_types = "\n".join([
-                f'        "{self.configModuleTypePrefix}{mt}",'
-                for mt in sorted(config_module_types)
-            ])
+        # Add the soong_config_module_type module definitions to the header
+        # lines so that they appear before any uses.
+        header_lines.append("")
+        for module_type in sorted(config_module_types):
+            # Create the corresponding soong config module type name by adding
+            # the prefix.
+            config_module_type = self.configModuleTypePrefix + module_type
             header_lines.append(f"""
-// Soong config variable stanza added by {producer.script}.
-soong_config_module_type_import {{
-    from: "{self.configBpDefFile}",
-    module_types: [
-{module_types}
-    ],
-}}
-""")
-        else:
-            # Add the soong_config_module_type module definitions to the header
-            # lines so that they appear before any uses.
-            header_lines.append("")
-            for module_type in sorted(config_module_types):
-                # Create the corresponding soong config module type name by
-                # adding the prefix.
-                config_module_type = self.configModuleTypePrefix + module_type
-                header_lines.append(f"""
 // Soong config variable module type added by {producer.script}.
 soong_config_module_type {{
     name: "{config_module_type}",
@@ -217,6 +223,33 @@ soong_config_module_type {{
         file.seek(0)
         file.truncate()
         file.write("\n".join(header_lines + content_lines) + "\n")
+
+
+@dataclasses.dataclass(frozen=True)
+class UseSourceConfigVarTransformation(SoongConfigVarTransformation):
+
+    def _apply_transformation(self, producer, file):
+        lines = []
+        for line in file:
+            line = line.rstrip("\n")
+            if line != self.PREFER_LINE:
+                lines.append(line)
+                continue
+
+            # Replace "prefer: false" with "use_source_config_var {...}".
+            namespace = self.configVar.namespace
+            name = self.configVar.name
+            lines.append(f"""\
+    // Do not prefer prebuilt if the Soong config variable "{name}" in namespace "{namespace}" is true.
+    use_source_config_var: {{
+        config_namespace: "{namespace}",
+        var_name: "{name}",
+    }},""")
+
+        # Overwrite the file with the updated contents.
+        file.seek(0)
+        file.truncate()
+        file.write("\n".join(lines) + "\n")
 
 
 @dataclasses.dataclass()
@@ -253,6 +286,22 @@ def sdk_snapshot_info_file(snapshots_dir, sdk_name, sdk_version):
 def sdk_snapshot_api_diff_file(snapshots_dir, sdk_name, sdk_version):
     """Get the path to the sdk snapshot api diff file."""
     return os.path.join(snapshots_dir, f"{sdk_name}-{sdk_version}-api-diff.txt")
+
+
+# The default time to use in zip entries. Ideally, this should be the same as is
+# used by soong_zip and ziptime but there is no strict need for that to be the
+# case. What matters is this is a fixed time so that the contents of zip files
+# created by this script do not depend on when it is run, only the inputs.
+default_zip_time = datetime.datetime(2008, 1, 1, 0, 0, 0, 0,
+                                     datetime.timezone.utc)
+
+
+# set the timestamps of the paths to the default_zip_time.
+def set_default_timestamp(base_dir, paths):
+    for path in paths:
+        timestamp = default_zip_time.timestamp()
+        p = os.path.join(base_dir, path)
+        os.utime(p, (timestamp, timestamp))
 
 
 @dataclasses.dataclass()
@@ -409,6 +458,13 @@ java_sdk_library_import {{
                     dest_dir, "snapshot-creation-build-number.txt")
                 shutil.copy(build_number_file, snapshot_build_number_file)
 
+            # Make sure that all the paths being added to the zip file have a
+            # fixed timestamp so that the contents of the zip file do not depend
+            # on when this script is run, only the inputs.
+            for root, dirs, files in os.walk(dest_dir):
+                set_default_timestamp(root, dirs)
+                set_default_timestamp(root, files)
+
             # Now zip up the files into a snapshot zip file.
             base_file = os.path.join(r_snapshot_dir, sdk_name + "-current")
             shutil.make_archive(base_file, "zip", dest_dir)
@@ -417,20 +473,17 @@ java_sdk_library_import {{
 
     @staticmethod
     def does_sdk_library_support_latest_api(sdk_library):
-        # TODO(b/235330409): remove service art from the exception list once
-        # this bug is fixed.
-        if sdk_library == "service-art" or \
-            sdk_library == "conscrypt.module.platform.api":
+        if sdk_library == "conscrypt.module.platform.api":
             return False
         return True
 
     def latest_api_file_targets(self, sdk_info_file):
         # Read the sdk info file and fetch the latest scope targets.
-        with open(sdk_info_file, "r") as sdk_info_file_object:
+        with open(sdk_info_file, "r", encoding="utf8") as sdk_info_file_object:
             sdk_info_file_json = json.loads(sdk_info_file_object.read())
 
         target_paths = []
-        target_dict = dict()
+        target_dict = {}
         for jsonItem in sdk_info_file_json:
             if not jsonItem["@type"] == "java_sdk_library":
                 continue
@@ -439,10 +492,10 @@ java_sdk_library_import {{
             if not self.does_sdk_library_support_latest_api(sdk_library):
                 continue
 
-            target_dict[sdk_library] = dict()
+            target_dict[sdk_library] = {}
             for scope in jsonItem["scopes"]:
                 scope_json = jsonItem["scopes"][scope]
-                target_dict[sdk_library][scope] = dict()
+                target_dict[sdk_library][scope] = {}
                 target_list = [
                     "current_api", "latest_api", "removed_api",
                     "latest_removed_api"
@@ -458,10 +511,11 @@ java_sdk_library_import {{
         # Build the latest scope targets for each module sdk
         # Compute the paths to all the latest scope targets for each module sdk.
         target_paths = []
-        target_dict = dict()
+        target_dict = {}
         for module in modules:
             for sdk in module.sdks:
-                if "host-exports" in sdk or "test-exports" in sdk:
+                sdk_type = sdk_type_from_name(sdk)
+                if not sdk_type.providesApis:
                     continue
 
                 sdk_info_file = sdk_snapshot_info_file(self.mainline_sdks_dir,
@@ -478,6 +532,11 @@ java_sdk_library_import {{
         with zipfile.ZipFile(sdk_zip_file, "r") as zipObj:
             extracted_current_api = zipObj.extract(
                 member=current_api, path=snapshots_dir)
+            # The diff tool has an exit code of 0, 1 or 2 depending on whether
+            # it find no differences, some differences or an error (like missing
+            # file). As 0 or 1 are both valid results this cannot use check=True
+            # so disable the pylint check.
+            # pylint: disable=subprocess-run-check
             diff = subprocess.run(
                 ["diff", "-u0", latest_api, extracted_current_api],
                 capture_output=True).stdout.decode("utf-8")
@@ -495,7 +554,9 @@ java_sdk_library_import {{
         sdk_zip_file = sdk_snapshot_zip_file(snapshots_dir, sdk, sdk_version)
         sdk_api_diff_file = sdk_snapshot_api_diff_file(snapshots_dir, sdk,
                                                        sdk_version)
-        with open(sdk_api_diff_file, "w") as sdk_api_diff_file_object:
+        with open(
+                sdk_api_diff_file, "w",
+                encoding="utf8") as sdk_api_diff_file_object:
             for sdk_library in target_dict[sdk_info_file]:
                 for scope in target_dict[sdk_info_file][sdk_library]:
                     scope_json = target_dict[sdk_info_file][sdk_library][scope]
@@ -516,7 +577,8 @@ java_sdk_library_import {{
         """For each module sdk, create the api diff file."""
         for module in modules:
             for sdk in module.sdks:
-                if "host-exports" in sdk or "test-exports" in sdk:
+                sdk_type = sdk_type_from_name(sdk)
+                if not sdk_type.providesApis:
                     continue
                 self.create_snapshot_api_diff(sdk, sdk_version, target_dict,
                                               snapshots_dir)
@@ -535,6 +597,19 @@ SDK_VERSIONS = [
 # The initially empty list of build releases. Every BuildRelease that is created
 # automatically appends itself to this list.
 ALL_BUILD_RELEASES = []
+
+
+class PreferHandling(enum.Enum):
+    """Enumeration of the various ways of handling prefer properties"""
+
+    # No special prefer property handling is required.
+    NONE = enum.auto()
+
+    # Apply the SoongConfigBoilerplateInserter transformation.
+    SOONG_CONFIG = enum.auto()
+
+    # Use the use_source_config_var property added in T.
+    USE_SOURCE_CONFIG_VAR_PROPERTY = enum.auto()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -573,7 +648,8 @@ class BuildRelease:
 
     # Whether this build release supports the Soong config boilerplate that is
     # used to control the prefer setting of modules via a Soong config variable.
-    supports_soong_config_boilerplate: bool = True
+    preferHandling: PreferHandling = \
+        PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY
 
     def __post_init__(self):
         # The following use object.__setattr__ as this object is frozen and
@@ -635,6 +711,8 @@ Q = BuildRelease(
     name="Q",
     # At the moment we do not generate a snapshot for Q.
     creator=create_no_dist_snapshot,
+    # This does not support or need any special prefer property handling.
+    preferHandling=PreferHandling.NONE,
 )
 R = BuildRelease(
     name="R",
@@ -645,17 +723,23 @@ R = BuildRelease(
     # unlikely to) support building an sdk snapshot for R so create an empty
     # environment to pass to Soong instead.
     soong_env={},
-    # R does not support or need Soong config boilerplate.
-    supports_soong_config_boilerplate=False)
+    # This does not support or need any special prefer property handling.
+    preferHandling=PreferHandling.NONE,
+)
 S = BuildRelease(
     name="S",
     # Generate a snapshot for S using Soong.
     creator=create_sdk_snapshots_in_soong,
+    # This requires the SoongConfigBoilerplateInserter transformation to be
+    # applied.
+    preferHandling=PreferHandling.SOONG_CONFIG,
 )
 Tiramisu = BuildRelease(
     name="Tiramisu",
     # Generate a snapshot for Tiramisu using Soong.
     creator=create_sdk_snapshots_in_soong,
+    # This supports the use_source_config_var property.
+    preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
 )
 
 # Insert additional BuildRelease definitions for following releases here,
@@ -720,13 +804,6 @@ class MainlineModule:
         name="module_build_from_source",
     )
 
-    # The bp file containing the definitions of the configuration module types
-    # to use in the sdk.
-    configBpDefFile: str = "packages/modules/common/Android.bp"
-
-    # The prefix to use for the soong config module types.
-    configModuleTypePrefix: str = "module_"
-
     for_r_build: typing.Optional[ForRBuild] = None
 
     # The last release on which this module was optional.
@@ -770,34 +847,36 @@ class MainlineModule:
         """Returns true for bundled modules. See BundledMainlineModule."""
         return False
 
-    def transformations(self, build_release):
+    def transformations(self, build_release, sdk_type):
         """Returns the transformations to apply to this module's snapshot(s)."""
         transformations = []
-        if build_release.supports_soong_config_boilerplate:
 
-            config_var = self.configVar
-            config_module_type_prefix = self.configModuleTypePrefix
-            config_bp_def_file = self.configBpDefFile
+        config_var = self.configVar
 
-            # If the module is optional then it needs its own Soong config
-            # variable to allow it to be managed separately from other modules.
-            if (self.last_optional_release and
-                    self.last_optional_release > build_release):
-                config_var = ConfigVar(
-                    namespace=f"{self.short_name}_module",
-                    name="source_build",
-                )
-                config_module_type_prefix = f"{self.short_name}_prebuilt_"
-                # Optional modules don't have their own config_bp_def_file so
-                # they have to generate the soong_config_module_types inline.
-                config_bp_def_file = ""
+        # If the module is optional then it needs its own Soong config
+        # variable to allow it to be managed separately from other modules.
+        if (self.last_optional_release and
+                self.last_optional_release > build_release):
+            config_var = ConfigVar(
+                namespace=f"{self.short_name}_module",
+                name="source_build",
+            )
 
+        prefer_handling = build_release.preferHandling
+        if prefer_handling == PreferHandling.SOONG_CONFIG:
+            sdk_type_prefix = sdk_type.configModuleTypePrefix
+            config_module_type_prefix = \
+                f"{self.short_name}{sdk_type_prefix}_prebuilt_"
             inserter = SoongConfigBoilerplateInserter(
                 "Android.bp",
                 configVar=config_var,
-                configModuleTypePrefix=config_module_type_prefix,
-                configBpDefFile=config_bp_def_file)
+                configModuleTypePrefix=config_module_type_prefix)
             transformations.append(inserter)
+        elif prefer_handling == PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY:
+            transformation = UseSourceConfigVarTransformation(
+                "Android.bp", configVar=config_var)
+            transformations.append(transformation)
+
         return transformations
 
     def is_required_for(self, target_build_release):
@@ -819,7 +898,7 @@ class BundledMainlineModule(MainlineModule):
     def is_bundled(self):
         return True
 
-    def transformations(self, build_release):
+    def transformations(self, build_release, sdk_type):
         # Bundled modules are only used on thin branches where the corresponding
         # sources are absent, so skip transformations and keep the default
         # `prefer: false`.
@@ -851,8 +930,6 @@ MAINLINE_MODULES = [
             namespace="art_module",
             name="source_build",
         ),
-        configBpDefFile="prebuilts/module_sdk/art/SoongConfig.bp",
-        configModuleTypePrefix="art_prebuilt_",
     ),
     MainlineModule(
         apex="com.android.btservices",
@@ -1111,7 +1188,8 @@ class SdkDistProducer:
     def dist_sdk_snapshot_api_diff(self, sdk_dist_dir, sdk, sdk_version, module,
                                    snapshots_dir):
         """Copy the sdk snapshot api diff file to a dist directory."""
-        if "host-exports" in sdk or "test-exports" in sdk:
+        sdk_type = sdk_type_from_name(sdk)
+        if not sdk_type.providesApis:
             return
 
         sdk_dist_subdir = os.path.join(sdk_dist_dir, module.apex, "sdk")
@@ -1147,14 +1225,13 @@ class SdkDistProducer:
 
     def populate_dist_snapshot(self, build_release, module, sdk, sdk_dist_dir,
                                sdk_version, snapshots_dir):
-        subdir = re.sub("^.+-(sdk|(host|test)-exports)$", r"\1", sdk)
-        if subdir not in ("sdk", "host-exports", "test-exports"):
-            raise Exception(f"{sdk} is not a valid name, expected it to end"
-                            f" with -(sdk|host-exports|test-exports)")
+        sdk_type = sdk_type_from_name(sdk)
+        subdir = sdk_type.name
 
         sdk_dist_subdir = os.path.join(sdk_dist_dir, module.apex, subdir)
         sdk_path = sdk_snapshot_zip_file(snapshots_dir, sdk, sdk_version)
-        transformations = module.transformations(build_release)
+        sdk_type = sdk_type_from_name(sdk)
+        transformations = module.transformations(build_release, sdk_type)
         self.dist_sdk_snapshot_zip(sdk_path, sdk_dist_subdir, transformations)
 
     def dist_sdk_snapshot_zip(self, src_sdk_zip, sdk_dist_dir, transformations):
@@ -1230,6 +1307,12 @@ def copy_zip_and_replace(producer, src_zip_path, dest_zip_path, src_dir, paths):
     # not affected by a change of directory.
     abs_src_zip_path = os.path.abspath(src_zip_path)
     abs_dest_zip_path = os.path.abspath(dest_zip_path)
+
+    # Make sure that all the paths being added to the zip file have a fixed
+    # timestamp so that the contents of the zip file do not depend on when this
+    # script is run, only the inputs.
+    set_default_timestamp(src_dir, paths)
+
     producer.subprocess_runner.run(
         ["zip", "-q", abs_src_zip_path, "--out", abs_dest_zip_path] + paths,
         # Change into the source directory before running zip.
@@ -1289,6 +1372,42 @@ def aosp_to_google_name(name):
 def google_to_aosp_name(name):
     """Transform a Google module name into an AOSP module name"""
     return name.replace("com.google.android.", "com.android.")
+
+
+@dataclasses.dataclass(frozen=True)
+class SdkType:
+    name: str
+
+    configModuleTypePrefix: str
+
+    providesApis: bool = False
+
+
+Sdk = SdkType(
+    name="sdk",
+    configModuleTypePrefix="",
+    providesApis=True,
+)
+HostExports = SdkType(
+    name="host-exports",
+    configModuleTypePrefix="_host_exports",
+)
+TestExports = SdkType(
+    name="test-exports",
+    configModuleTypePrefix="_test_exports",
+)
+
+
+def sdk_type_from_name(name):
+    if name.endswith("-sdk"):
+        return Sdk
+    if name.endswith("-host-exports"):
+        return HostExports
+    if name.endswith("-test-exports"):
+        return TestExports
+
+    raise Exception(f"{name} is not a valid sdk name, expected it to end"
+                    f" with -(sdk|host-exports|test-exports)")
 
 
 def filter_modules(modules, target_build_apps):
