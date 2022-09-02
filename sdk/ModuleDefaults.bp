@@ -102,7 +102,6 @@ java_defaults {
     // Hide impl library and stub sources
     impl_library_visibility: [
         ":__pkg__",
-        "//frameworks/base", // For framework-all
         "//frameworks/base/api", // For framework-all
     ],
     stubs_source_visibility: ["//visibility:private"],
@@ -111,6 +110,11 @@ java_defaults {
 
     // Collates API usages from each module for further analysis.
     plugins: ["java_api_finder"],
+
+    // Disallow disabling the NewApi lint check.
+    lint: {
+        strict_updatability_linting: true,
+    },
 
     dist_group: "android",
 }
@@ -209,9 +213,35 @@ apex_defaults {
     defaults_visibility: ["//visibility:public"],
 }
 
+DCLA_MIN_SDK_VERSION = "31"
+
+soong_config_module_type_import {
+    from: "system/apex/Android.bp",
+    module_types: ["library_linking_strategy_apex_defaults"],
+}
+
+library_linking_strategy_apex_defaults {
+    name: "r-launched-dcla-enabled-apex-module",
+    defaults_visibility: ["//packages/modules/adb:__subpackages__"],
+    defaults: ["r-launched-apex-module"],
+    soong_config_variables: {
+        library_linking_strategy: {
+            // Use the R min_sdk_version
+            prefer_static: {},
+            // Override the R min_sdk_version to min_sdk_version that supports dcla
+            conditions_default: {
+                min_sdk_version: DCLA_MIN_SDK_VERSION,
+            },
+        },
+    },
+}
+
 apex_defaults {
     name: "s-launched-apex-module",
     min_sdk_version: "31",
+    // Indicates that pre-installed version of this apex can be compressed.
+    // Whether it actually will be compressed is controlled on per-device basis.
+    compressible:true,
     updatable: true,
     defaults_visibility: [
         "//art:__subpackages__",
@@ -223,5 +253,8 @@ apex_defaults {
     name: "t-launched-apex-module",
     min_sdk_version: "Tiramisu",
     updatable: true,
+    // Indicates that pre-installed version of this apex can be compressed.
+    // Whether it actually will be compressed is controlled on per-device basis.
+    compressible:true,
     defaults_visibility: ["//packages/modules:__subpackages__"],
 }
