@@ -18,24 +18,15 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-java_test_host {
-    name: "ApkInApexTest",
+java_library_host {
+    name: "ApexInstallHelper",
+    visibility: ["//visibility:public"],
     srcs: [
-        "ApkInApexTest.java"
+        "ApexInstallHelper.java"
     ],
     libs: ["tradefed"],
-    java_resources: [
-        ":test_com.android.modules.apkinapex",
-    ],
     static_libs: [
-        "compatibility-host-util",
         "cts-install-lib-host",
         "frameworks-base-hostutils",
-        "modules-utils-build-testing",
-        "truth-prebuilt",
-    ],
-    test_suites: [
-        "general-tests",
-        "mts-mainline-infra",
     ],
 }
