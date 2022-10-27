@@ -422,6 +422,11 @@ class SnapshotBuilder:
                             scope_pattern=r"(public|system|module-lib)",
                             name_pattern=fr"({module_name}(-removed|-stubs)?)"))
 
+                    available_apexes = [f'"{aosp_apex}"']
+                    if aosp_apex != "com.android.tethering":
+                        available_apexes.append(f'"test_{aosp_apex}"')
+                    apex_available = ",\n        ".join(available_apexes)
+
                     bp.write(f"""
 java_sdk_library_import {{
     name: "{module_name}",
@@ -429,8 +434,7 @@ java_sdk_library_import {{
     prefer: true,
     shared_library: {shared_library},
     apex_available: [
-        "{aosp_apex}",
-        "test_{aosp_apex}",
+        {apex_available},
     ],
     public: {{
         jars: ["public/{module_name}-stubs.jar"],
@@ -538,7 +542,8 @@ java_sdk_library_import {{
             # so disable the pylint check.
             # pylint: disable=subprocess-run-check
             diff = subprocess.run(
-                ["diff", "-u0", latest_api, extracted_current_api],
+                ["diff", "-u0", latest_api, extracted_current_api, "--label", latest_api, "--label",
+                 extracted_current_api],
                 capture_output=True).stdout.decode("utf-8")
             file_object.write(diff)
 
@@ -934,7 +939,7 @@ MAINLINE_MODULES = [
     MainlineModule(
         apex="com.android.btservices",
         sdks=["btservices-module-sdk"],
-        first_release=Tiramisu,
+        first_release=LATEST,
         # Bluetooth has always been and is still optional.
         last_optional_release=LATEST,
     ),
@@ -1124,9 +1129,7 @@ class SdkDistProducer:
                                                       "bundled-mainline-sdks")
 
     def prepare(self):
-        # Clear the sdk dist directories.
-        shutil.rmtree(self.mainline_sdks_dir, ignore_errors=True)
-        shutil.rmtree(self.bundled_mainline_sdks_dir, ignore_errors=True)
+        pass
 
     def produce_dist(self, modules, build_releases):
         # Prepare the dist directory for the sdks.
