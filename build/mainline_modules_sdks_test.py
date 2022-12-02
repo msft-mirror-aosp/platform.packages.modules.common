@@ -50,8 +50,8 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
         z.writestr(f"sdk_library/public/{name}.txt",
                    "method public int testMethod(int);")
 
-    def create_snapshot_file(self, out_dir, name, version, for_r_build):
-        zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name, version))
+    def create_snapshot_file(self, out_dir, name, for_r_build):
+        zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name))
         with zipfile.ZipFile(zip_file, "w") as z:
             z.writestr("Android.bp", "")
             if name.endswith("-sdk"):
@@ -61,18 +61,16 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                 else:
                     self.create_sdk_library_files(z, re.sub(r"-.*$", "", name))
 
-    def build_snapshots(self, build_release, sdk_versions, modules):
+    def build_snapshots(self, build_release, modules):
         self.snapshots.append((build_release.name, build_release.soong_env,
-                               sdk_versions, [m.apex for m in modules]))
+                               [m.apex for m in modules]))
         # Create input file structure.
         sdks_out_dir = Path(self.mainline_sdks_dir).joinpath("test")
         sdks_out_dir.mkdir(parents=True, exist_ok=True)
         # Create a fake sdk zip file for each module.
         for module in modules:
             for sdk in module.sdks:
-                for sdk_version in sdk_versions:
-                    self.create_snapshot_file(sdks_out_dir, sdk, sdk_version,
-                                              module.for_r_build)
+                self.create_snapshot_file(sdks_out_dir, sdk, module.for_r_build)
         return sdks_out_dir
 
     def get_art_module_info_file_data(self, sdk):
@@ -110,7 +108,7 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
             # For rest of the modules, generate an empty .info file.
             self.write_data_to_file(sdk_info_file, "[]")
 
-    def build_sdk_scope_targets(self, build_release, sdk_version, modules):
+    def build_sdk_scope_targets(self, build_release, modules):
         target_paths = []
         target_dict = {}
         for module in modules:
@@ -119,8 +117,7 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                     continue
 
                 sdk_info_file = mm.sdk_snapshot_info_file(
-                    Path(self.mainline_sdks_dir).joinpath("test"), sdk,
-                    sdk_version)
+                    Path(self.mainline_sdks_dir).joinpath("test"), sdk)
                 self.create_snapshot_info_file(module, sdk_info_file, sdk)
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
@@ -177,6 +174,7 @@ class TestProduceDist(unittest.TestCase):
         modules = [
             MAINLINE_MODULES_BY_APEX["com.android.art"],
             MAINLINE_MODULES_BY_APEX["com.android.ipsec"],
+            MAINLINE_MODULES_BY_APEX["com.android.tethering"],
             # Create a google specific module.
             mm.aosp_to_google(MAINLINE_MODULES_BY_APEX["com.android.wifi"]),
         ]
@@ -193,11 +191,13 @@ class TestProduceDist(unittest.TestCase):
             [
                 # Build specific snapshots.
                 "mainline-sdks/for-R-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                "mainline-sdks/for-R-build/current/com.android.tethering/sdk/tethering-module-sdk-current.zip",
                 "mainline-sdks/for-R-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
                 "mainline-sdks/for-S-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
                 "mainline-sdks/for-S-build/current/com.android.art/sdk/art-module-sdk-current.zip",
                 "mainline-sdks/for-S-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
                 "mainline-sdks/for-S-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                "mainline-sdks/for-S-build/current/com.android.tethering/sdk/tethering-module-sdk-current.zip",
                 "mainline-sdks/for-S-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt",
@@ -205,6 +205,8 @@ class TestProduceDist(unittest.TestCase):
                 "mainline-sdks/for-latest-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.tethering/sdk/tethering-module-sdk-current-api-diff.txt",
+                "mainline-sdks/for-latest-build/current/com.android.tethering/sdk/tethering-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
             ],
@@ -213,6 +215,7 @@ class TestProduceDist(unittest.TestCase):
         r_snaphot_dir = os.path.join(self.tmp_out_dir,
                                      "soong/mainline-sdks/test/for-R-build")
         aosp_ipsec_r_bp_file = "com.android.ipsec/sdk_library/Android.bp"
+        aosp_tethering_r_bp_file = "com.android.tethering/sdk_library/Android.bp"
         google_wifi_android_bp = "com.google.android.wifi/sdk_library/Android.bp"
         self.assertEqual([
             aosp_ipsec_r_bp_file,
@@ -221,6 +224,12 @@ class TestProduceDist(unittest.TestCase):
             "com.android.ipsec/sdk_library/public/android.net.ipsec.ike.srcjar",
             "com.android.ipsec/sdk_library/public/android.net.ipsec.ike.txt",
             "com.android.ipsec/snapshot-creation-build-number.txt",
+            aosp_tethering_r_bp_file,
+            "com.android.tethering/sdk_library/public/framework-tethering-removed.txt",
+            "com.android.tethering/sdk_library/public/framework-tethering-stubs.jar",
+            "com.android.tethering/sdk_library/public/framework-tethering.srcjar",
+            "com.android.tethering/sdk_library/public/framework-tethering.txt",
+            "com.android.tethering/snapshot-creation-build-number.txt",
             google_wifi_android_bp,
             "com.google.android.wifi/sdk_library/public/framework-wifi-removed.txt",
             "com.google.android.wifi/sdk_library/public/framework-wifi-stubs.jar",
@@ -228,6 +237,7 @@ class TestProduceDist(unittest.TestCase):
             "com.google.android.wifi/sdk_library/public/framework-wifi.txt",
             "com.google.android.wifi/snapshot-creation-build-number.txt",
             "ipsec-module-sdk-current.zip",
+            "tethering-module-sdk-current.zip",
             "wifi-module-sdk-current.zip",
         ], sorted(self.list_files_in_dir(r_snaphot_dir)))
 
@@ -240,6 +250,11 @@ class TestProduceDist(unittest.TestCase):
         ipsec_contents = read_r_snapshot_contents(aosp_ipsec_r_bp_file)
         expected = read_test_data("ipsec_for_r_Android.bp")
         self.assertEqual(expected, ipsec_contents)
+
+        # Check the contents of the AOSP tethering module
+        tethering_contents = read_r_snapshot_contents(aosp_tethering_r_bp_file)
+        expected = read_test_data("tethering_for_r_Android.bp")
+        self.assertEqual(expected, tethering_contents)
 
         # Check the contents of the Google ipsec module
         wifi_contents = read_r_snapshot_contents(google_wifi_android_bp)
@@ -340,13 +355,11 @@ class TestProduceDist(unittest.TestCase):
             (
                 "R",
                 {},
-                ["current"],
                 ["com.android.ipsec", "com.google.android.wifi"],
             ),
             (
                 "latest",
                 {},
-                ["current"],
                 [
                     "com.android.art", "com.android.ipsec",
                     "com.google.android.wifi"
@@ -357,7 +370,6 @@ class TestProduceDist(unittest.TestCase):
                 {
                     "SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": "S"
                 },
-                ["current"],
                 [
                     "com.android.art", "com.android.ipsec",
                     "com.google.android.wifi"
