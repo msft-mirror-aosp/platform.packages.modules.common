@@ -714,7 +714,7 @@ R = BuildRelease(
 )
 S = BuildRelease(
     name="S",
-    # Generate a snapshot for S using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
     # This requires the SoongConfigBoilerplateInserter transformation to be
     # applied.
@@ -722,9 +722,16 @@ S = BuildRelease(
 )
 Tiramisu = BuildRelease(
     name="Tiramisu",
-    # Generate a snapshot for Tiramisu using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
-    # This supports the use_source_config_var property.
+    # This build release supports the use_source_config_var property.
+    preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
+)
+UpsideDownCake = BuildRelease(
+    name="UpsideDownCake",
+    # Generate a snapshot for this build release using Soong.
+    creator=create_sdk_snapshots_in_soong,
+    # This build release supports the use_source_config_var property.
     preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
 )
 
@@ -925,6 +932,11 @@ MAINLINE_MODULES = [
         last_optional_release=LATEST,
     ),
     MainlineModule(
+        apex="com.android.configinfrastructure",
+        sdks=["configinfrastructure-sdk"],
+        first_release=UpsideDownCake,
+    ),
+    MainlineModule(
         apex="com.android.conscrypt",
         sdks=[
             "conscrypt-module-sdk",
@@ -936,6 +948,11 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+    ),
+    MainlineModule(
+        apex="com.android.healthconnect",
+        sdks=["healthconnect-module-sdk"],
+        first_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -984,6 +1001,11 @@ MAINLINE_MODULES = [
         # when building non-GMS devices.
         # TODO(b/238203992): remove once all modules are optional at build time.
         last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.rkpd",
+        sdks=["rkpd-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.scheduling",
