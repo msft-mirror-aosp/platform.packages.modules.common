@@ -128,9 +128,11 @@ function init() {
 
 function build_modules() {
 
+  #TODO(b/263406837) remove BUILD_BROKEN_DISABLE_BAZEL, which will enable Bazel builds with --bazel-mode by default
   build/soong/soong_ui.bash --make-mode "$@" \
     ALWAYS_EMBED_NOTICES=true \
     MODULE_BUILD_FROM_SOURCE=true \
+    BUILD_BROKEN_DISABLE_BAZEL=true \
     ${extra_build_params} \
     "${RUN_ERROR_PRONE:+"RUN_ERROR_PRONE=true"}" \
     apps_only \
@@ -149,17 +151,6 @@ function main() {
   build/soong/soong_ui.bash --make-mode installclean
 
   DIST_DIR="${DIST_DIR}" build_modules
-
-  # TODO(b/198437211): remove unconditionally added APEX_BUILD_FOR_PRE_S_DEVICES
-  # below.
-  # Command line flag passed in would also build modules configured
-  # for PRE_S configuration.  Disabled by default, this feature enables
-  # building modules with statically linked libraries.
-  # https://goto.google.com/building-dynamic-common-apex-variants
-  # Artifacts are stored in a different dist_dir (*_pre_s)
-  if [[ "${BUILD_PRE_S_APEX}" == "true" ]]; then
-      DIST_DIR="${DIST_DIR}_pre_s" APEX_BUILD_FOR_PRE_S_DEVICES=true build_modules
-  fi
 }
 
 init "$@"
