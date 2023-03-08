@@ -950,8 +950,8 @@ MAINLINE_MODULES = [
         for_r_build=None,
     ),
     MainlineModule(
-        apex="com.android.healthconnect",
-        sdks=["healthconnect-module-sdk"],
+        apex="com.android.healthfitness",
+        sdks=["healthfitness-module-sdk"],
         first_release=LATEST,
     ),
     MainlineModule(
@@ -1006,6 +1006,8 @@ MAINLINE_MODULES = [
         apex="com.android.rkpd",
         sdks=["rkpd-sdk"],
         first_release=UpsideDownCake,
+        # Rkpd has always been and is still optional.
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.scheduling",
