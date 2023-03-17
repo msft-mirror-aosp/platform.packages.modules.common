@@ -672,6 +672,9 @@ class MainlineModule:
     # Defaults to the last part of the apex name.
     short_name: str = ""
 
+    # Additional transformations
+    additional_transformations: list[FileTransformation] = None
+
     def __post_init__(self):
         # If short_name is not set then set it to the last component of the apex
         # name.
@@ -711,6 +714,10 @@ class MainlineModule:
                 configModuleTypePrefix=config_module_type_prefix,
                 configBpDefFile=config_bp_def_file)
             transformations.append(inserter)
+            
+        if self.additional_transformations and build_release > R:
+            transformations.extend(self.additional_transformations)
+
         return transformations
 
     def is_required_for(self, target_build_release):
