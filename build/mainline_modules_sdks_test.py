@@ -393,7 +393,7 @@ def read_test_data(relative_path):
 
 class TestAndroidBpTransformations(unittest.TestCase):
 
-    def apply_transformations(self, src, transformations, expected):
+    def apply_transformations(self, src, transformations, build_release, expected):
         producer = mm.SdkDistProducer(
             subprocess_runner=mock.Mock(mm.SubprocessRunner),
             snapshot_builder=mock.Mock(mm.SnapshotBuilder),
@@ -405,7 +405,8 @@ class TestAndroidBpTransformations(unittest.TestCase):
             with open(path, "w", encoding="utf8") as f:
                 f.write(src)
 
-            mm.apply_transformations(producer, tmp_dir, transformations)
+            mm.apply_transformations(
+                producer, tmp_dir, transformations, build_release)
 
             with open(path, "r", encoding="utf8") as f:
                 result = f.read()
@@ -426,7 +427,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.S, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_common_mainline_module_tiramisu(self):
         """Tests the transformations applied to a common mainline sdk on T.
@@ -441,7 +442,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.Tiramisu, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
     def test_optional_mainline_module(self):
         """Tests the transformations applied to an optional mainline sdk on S.
@@ -457,7 +458,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.wifi"]
         transformations = module.transformations(mm.S, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_optional_mainline_module_tiramisu(self):
         """Tests the transformations applied to an optional mainline sdk on T.
@@ -472,7 +473,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.wifi"]
         transformations = module.transformations(mm.Tiramisu, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
     def test_art(self):
         """Tests the transformations applied to a the ART mainline module.
@@ -488,7 +489,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.art"]
         transformations = module.transformations(mm.S, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_art_module_exports(self):
         """Tests the transformations applied to a the ART mainline module.
@@ -504,7 +505,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.art"]
         transformations = module.transformations(mm.S, mm.HostExports)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_r_build(self):
         """Tests the transformations that are applied for the R build.
@@ -522,7 +523,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.R, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.R, expected)
 
 
 class TestFilterModules(unittest.TestCase):
