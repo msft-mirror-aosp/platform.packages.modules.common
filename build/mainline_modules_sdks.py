@@ -69,7 +69,7 @@ class FileTransformation:
     # The path of the file within the SDK snapshot zip file.
     path: str
 
-    def apply(self, producer, path):
+    def apply(self, producer, path, build_release):
         """Apply the transformation to the src_path to produce the dest_path."""
         raise NotImplementedError
 
@@ -92,11 +92,11 @@ class SoongConfigBoilerplateInserter(FileTransformation):
     # The prefix to use for the soong config module types.
     configModuleTypePrefix: str
 
-    def apply(self, producer, path):
+    def apply(self, producer, path, build_release):
         with open(path, "r+", encoding="utf8") as file:
-            self._apply_transformation(producer, file)
+            self._apply_transformation(producer, file, build_release)
 
-    def _apply_transformation(self, producer, file):
+    def _apply_transformation(self, producer, file, build_release):
         # TODO(b/174997203): Remove this when we have a proper way to control
         #  prefer flags in Mainline modules.
 
@@ -1042,9 +1042,11 @@ class SdkDistProducer:
         sdk_dist_subdir = os.path.join(sdk_dist_dir, module.apex, subdir)
         sdk_path = sdk_snapshot_zip_file(snapshots_dir, sdk, sdk_version)
         transformations = module.transformations(build_release)
-        self.dist_sdk_snapshot_zip(sdk_path, sdk_dist_subdir, transformations)
+        self.dist_sdk_snapshot_zip(
+            build_release, sdk_path, sdk_dist_subdir, transformations)
 
-    def dist_sdk_snapshot_zip(self, src_sdk_zip, sdk_dist_dir, transformations):
+    def dist_sdk_snapshot_zip(
+        self, build_release, src_sdk_zip, sdk_dist_dir, transformations):
         """Copy the sdk snapshot zip file to a dist directory.
 
         If no transformations are provided then this simply copies the show sdk
@@ -1052,7 +1054,8 @@ class SdkDistProducer:
         provided then the files to be transformed are extracted from the
         snapshot zip file, they are transformed to files in a separate directory
         and then a new zip file is created in the dist directory with the
-        original files replaced by the newly transformed files.
+        original files replaced by the newly transformed files. build_release is
+        provided for transformations if it is needed.
         """
         os.makedirs(sdk_dist_dir)
         dest_sdk_zip = os.path.join(sdk_dist_dir, os.path.basename(src_sdk_zip))
@@ -1075,7 +1078,7 @@ class SdkDistProducer:
             extract_matching_files_from_zip(src_sdk_zip, tmp_dir, pattern)
 
             # Apply the transformations to the extracted files in situ.
-            apply_transformations(self, tmp_dir, transformations)
+            apply_transformations(self, tmp_dir, transformations, build_release)
 
             # Replace the original entries in the zip with the transformed
             # files.
@@ -1123,7 +1126,7 @@ def copy_zip_and_replace(producer, src_zip_path, dest_zip_path, src_dir, paths):
         cwd=src_dir)
 
 
-def apply_transformations(producer, tmp_dir, transformations):
+def apply_transformations(producer, tmp_dir, transformations, build_release):
     for transformation in transformations:
         path = os.path.join(tmp_dir, transformation.path)
 
@@ -1131,7 +1134,7 @@ def apply_transformations(producer, tmp_dir, transformations):
         modified = os.path.getmtime(path)
 
         # Transform the file.
-        transformation.apply(producer, path)
+        transformation.apply(producer, path, build_release)
 
         # Reset the timestamp of the file to the original timestamp before the
         # transformation was applied.
