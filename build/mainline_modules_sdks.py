@@ -70,8 +70,8 @@ class FileTransformation:
     path: str
 
     def apply(self, producer, path, build_release):
-        """Apply the transformation to the src_path to produce the dest_path."""
-        raise NotImplementedError
+        with open(path, "r+", encoding="utf8") as file:
+            self._apply_transformation(producer, file, build_release)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -92,9 +92,9 @@ class SoongConfigBoilerplateInserter(FileTransformation):
     # The prefix to use for the soong config module types.
     configModuleTypePrefix: str
 
-    def apply(self, producer, path, build_release):
-        with open(path, "r+", encoding="utf8") as file:
-            self._apply_transformation(producer, file, build_release)
+    def config_module_type(self, module_type):
+        return self.configModuleTypePrefix + module_type
+
 
     def _apply_transformation(self, producer, file, build_release):
         # TODO(b/174997203): Remove this when we have a proper way to control
@@ -714,7 +714,7 @@ class MainlineModule:
                 configModuleTypePrefix=config_module_type_prefix,
                 configBpDefFile=config_bp_def_file)
             transformations.append(inserter)
-            
+
         if self.additional_transformations and build_release > R:
             transformations.extend(self.additional_transformations)
 
