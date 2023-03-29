@@ -377,7 +377,7 @@ def read_test_data(relative_path):
 
 class TestSoongConfigBoilerplateInserter(unittest.TestCase):
 
-    def apply_transformations(self, src, transformations, expected):
+    def apply_transformations(self, src, transformations, build_release, expected):
         producer = mm.SdkDistProducer(
             subprocess_runner=mock.Mock(mm.SubprocessRunner),
             snapshot_builder=mock.Mock(mm.SnapshotBuilder),
@@ -389,7 +389,8 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
             with open(path, "w", encoding="utf8") as f:
                 f.write(src)
 
-            mm.apply_transformations(producer, tmp_dir, transformations)
+            mm.apply_transformations(
+                producer, tmp_dir, transformations, build_release)
 
             with open(path, "r", encoding="utf8") as f:
                 result = f.read()
@@ -411,7 +412,7 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.S)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
         # Check that Tiramisu provides the same transformations as S.
         tiramisu_transformations = module.transformations(mm.Tiramisu)
@@ -434,7 +435,7 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.wifi"]
         transformations = module.transformations(mm.S)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
         # Check that Tiramisu provides the same transformations as S.
         tiramisu_transformations = module.transformations(mm.Tiramisu)
@@ -457,7 +458,7 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.art"]
         transformations = module.transformations(mm.S)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_r_build(self):
         """Tests the transformations that are applied for the R build.
@@ -475,7 +476,43 @@ class TestSoongConfigBoilerplateInserter(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.R)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.R, expected)
+
+    def test_additional_transformation(self):
+        """Tests additional transformation.
+
+        This uses ipsec as an example of a common case for adding information
+        in Android.bp file.
+        This checks will append the information in Android.bp for a regular module.
+        """
+
+        @dataclasses.dataclass(frozen=True)
+        class TestTransformation(mm.FileTransformation):
+            """Transforms an Android.bp file by appending testing message."""
+
+            test_content: str = ""
+
+            def apply(self, producer, path, build_release):
+                with open(path, "a+", encoding="utf8") as file:
+                    self._apply_transformation(producer, file, build_release)
+
+            def _apply_transformation(self, producer, file, build_release):
+                if build_release >= mm.Tiramisu:
+                    file.write(self.test_content)
+
+        src = read_test_data("ipsec_Android.bp.input")
+
+        expected = read_test_data(
+            "ipsec_tiramisu_Android.bp.additional.expected")
+        test_transformation = TestTransformation(
+            "Android.bp", test_content="\n// Adding by test")
+        module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
+        module = dataclasses.replace(
+            module, apex=module.apex,
+            first_release=module.first_release,
+            additional_transformations=[test_transformation])
+        transformations = module.transformations(mm.Tiramisu, mm.Sdk)
+        self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
 
 class TestFilterModules(unittest.TestCase):
