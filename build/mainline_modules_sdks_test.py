@@ -23,6 +23,7 @@ import shutil
 import tempfile
 import unittest
 import zipfile
+import json
 from unittest import mock
 
 import mainline_modules_sdks as mm
@@ -50,8 +51,8 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
         z.writestr(f"sdk_library/public/{name}.txt",
                    "method public int testMethod(int);")
 
-    def create_snapshot_file(self, out_dir, name, version, for_r_build):
-        zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name, version))
+    def create_snapshot_file(self, out_dir, name, for_r_build):
+        zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name))
         with zipfile.ZipFile(zip_file, "w") as z:
             z.writestr("Android.bp", "")
             if name.endswith("-sdk"):
@@ -61,18 +62,16 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                 else:
                     self.create_sdk_library_files(z, re.sub(r"-.*$", "", name))
 
-    def build_snapshots(self, build_release, sdk_versions, modules):
+    def build_snapshots(self, build_release, modules):
         self.snapshots.append((build_release.name, build_release.soong_env,
-                               sdk_versions, [m.apex for m in modules]))
+                               [m.apex for m in modules]))
         # Create input file structure.
         sdks_out_dir = Path(self.mainline_sdks_dir).joinpath("test")
         sdks_out_dir.mkdir(parents=True, exist_ok=True)
         # Create a fake sdk zip file for each module.
         for module in modules:
             for sdk in module.sdks:
-                for sdk_version in sdk_versions:
-                    self.create_snapshot_file(sdks_out_dir, sdk, sdk_version,
-                                              module.for_r_build)
+                self.create_snapshot_file(sdks_out_dir, sdk, module.for_r_build)
         return sdks_out_dir
 
     def get_art_module_info_file_data(self, sdk):
@@ -110,7 +109,11 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
             # For rest of the modules, generate an empty .info file.
             self.write_data_to_file(sdk_info_file, "[]")
 
-    def build_sdk_scope_targets(self, build_release, sdk_version, modules):
+    def get_module_extension_version(self):
+        # Return any integer value indicating the module extension version for testing.
+        return 5
+
+    def build_sdk_scope_targets(self, build_release, modules):
         target_paths = []
         target_dict = {}
         for module in modules:
@@ -119,8 +122,7 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                     continue
 
                 sdk_info_file = mm.sdk_snapshot_info_file(
-                    Path(self.mainline_sdks_dir).joinpath("test"), sdk,
-                    sdk_version)
+                    Path(self.mainline_sdks_dir).joinpath("test"), sdk)
                 self.create_snapshot_info_file(module, sdk_info_file, sdk)
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
@@ -202,14 +204,18 @@ class TestProduceDist(unittest.TestCase):
                 "mainline-sdks/for-S-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
                 "mainline-sdks/for-S-build/current/com.android.tethering/sdk/tethering-module-sdk-current.zip",
                 "mainline-sdks/for-S-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.art/gantry-metadata.json",
                 "mainline-sdks/for-latest-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.ipsec/gantry-metadata.json",
                 "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.ipsec/sdk/ipsec-module-sdk-current.zip",
+                "mainline-sdks/for-latest-build/current/com.android.tethering/gantry-metadata.json",
                 "mainline-sdks/for-latest-build/current/com.android.tethering/sdk/tethering-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.tethering/sdk/tethering-module-sdk-current.zip",
+                "mainline-sdks/for-latest-build/current/com.google.android.wifi/gantry-metadata.json",
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
             ],
@@ -298,6 +304,7 @@ class TestProduceDist(unittest.TestCase):
                 "bundled-mainline-sdks/platform-mainline/sdk/platform-mainline-sdk-current.zip",
                 "bundled-mainline-sdks/platform-mainline/test-exports/platform-mainline-test-exports-current.zip",
                 # Unbundled (normal) modules.
+                "mainline-sdks/for-latest-build/current/com.android.art/gantry-metadata.json",
                 "mainline-sdks/for-latest-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current.zip",
@@ -313,6 +320,29 @@ class TestProduceDist(unittest.TestCase):
             os.path.getsize(art_api_diff_file),
             0,
             msg="Api diff file should not be empty for the art module")
+
+        art_gantry_metadata_json_file = os.path.join(
+            self.tmp_dist_dir,
+            "mainline-sdks/for-latest-build/current/com.android.art/gantry-metadata.json"
+        )
+
+        with open(art_gantry_metadata_json_file, "r",
+                  encoding="utf8") as gantry_metadata_json_file_object:
+            json_data = json.load(gantry_metadata_json_file_object)
+
+        self.assertEqual(
+            json_data["api_diff_file"],
+            "art-module-sdk-current-api-diff.txt",
+            msg="Incorrect api-diff file name.")
+        self.assertEqual(
+            json_data["api_diff_file_size"],
+            267,
+            msg="Incorrect api-diff file size.")
+        self.assertEqual(
+            json_data["module_extension_version"],
+            5,
+            msg="The module extension version does not match the expected value."
+        )
 
     def create_build_number_file(self):
         soong_dir = os.path.join(self.tmp_out_dir, "soong")
@@ -358,13 +388,11 @@ class TestProduceDist(unittest.TestCase):
             (
                 "R",
                 {},
-                ["current"],
                 ["com.android.ipsec", "com.google.android.wifi"],
             ),
             (
                 "latest",
                 {},
-                ["current"],
                 [
                     "com.android.art", "com.android.ipsec",
                     "com.google.android.wifi"
@@ -375,7 +403,6 @@ class TestProduceDist(unittest.TestCase):
                 {
                     "SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": "S"
                 },
-                ["current"],
                 [
                     "com.android.art", "com.android.ipsec",
                     "com.google.android.wifi"
@@ -411,7 +438,7 @@ def read_test_data(relative_path):
 
 class TestAndroidBpTransformations(unittest.TestCase):
 
-    def apply_transformations(self, src, transformations, expected):
+    def apply_transformations(self, src, transformations, build_release, expected):
         producer = mm.SdkDistProducer(
             subprocess_runner=mock.Mock(mm.SubprocessRunner),
             snapshot_builder=mock.Mock(mm.SnapshotBuilder),
@@ -423,7 +450,8 @@ class TestAndroidBpTransformations(unittest.TestCase):
             with open(path, "w", encoding="utf8") as f:
                 f.write(src)
 
-            mm.apply_transformations(producer, tmp_dir, transformations)
+            mm.apply_transformations(
+                producer, tmp_dir, transformations, build_release)
 
             with open(path, "r", encoding="utf8") as f:
                 result = f.read()
@@ -444,7 +472,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.S, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_common_mainline_module_tiramisu(self):
         """Tests the transformations applied to a common mainline sdk on T.
@@ -459,7 +487,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.Tiramisu, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
     def test_optional_mainline_module(self):
         """Tests the transformations applied to an optional mainline sdk on S.
@@ -475,7 +503,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.wifi"]
         transformations = module.transformations(mm.S, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_optional_mainline_module_tiramisu(self):
         """Tests the transformations applied to an optional mainline sdk on T.
@@ -490,7 +518,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.wifi"]
         transformations = module.transformations(mm.Tiramisu, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
     def test_art(self):
         """Tests the transformations applied to a the ART mainline module.
@@ -506,7 +534,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.art"]
         transformations = module.transformations(mm.S, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_art_module_exports(self):
         """Tests the transformations applied to a the ART mainline module.
@@ -522,7 +550,7 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.art"]
         transformations = module.transformations(mm.S, mm.HostExports)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.S, expected)
 
     def test_r_build(self):
         """Tests the transformations that are applied for the R build.
@@ -540,7 +568,43 @@ class TestAndroidBpTransformations(unittest.TestCase):
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         transformations = module.transformations(mm.R, mm.Sdk)
 
-        self.apply_transformations(src, transformations, expected)
+        self.apply_transformations(src, transformations, mm.R, expected)
+
+    def test_additional_transformation(self):
+        """Tests additional transformation.
+
+        This uses ipsec as an example of a common case for adding information
+        in Android.bp file.
+        This checks will append the information in Android.bp for a regular module.
+        """
+
+        @dataclasses.dataclass(frozen=True)
+        class TestTransformation(mm.FileTransformation):
+            """Transforms an Android.bp file by appending testing message."""
+
+            test_content: str = ""
+
+            def apply(self, producer, path, build_release):
+                with open(path, "a+", encoding="utf8") as file:
+                    self._apply_transformation(producer, file, build_release)
+
+            def _apply_transformation(self, producer, file, build_release):
+                if build_release >= mm.Tiramisu:
+                    file.write(self.test_content)
+
+        src = read_test_data("ipsec_Android.bp.input")
+
+        expected = read_test_data(
+            "ipsec_tiramisu_Android.bp.additional.expected")
+        test_transformation = TestTransformation(
+            "Android.bp", test_content="\n// Adding by test")
+        module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
+        module = dataclasses.replace(
+            module, apex=module.apex,
+            first_release=module.first_release,
+            additional_transformations=[test_transformation])
+        transformations = module.transformations(mm.Tiramisu, mm.Sdk)
+        self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
 
 class TestFilterModules(unittest.TestCase):
