@@ -472,7 +472,8 @@ java_sdk_library_import {{
 
     @staticmethod
     def does_sdk_library_support_latest_api(sdk_library):
-        if sdk_library == "conscrypt.module.platform.api":
+        if sdk_library == "conscrypt.module.platform.api" or \
+            sdk_library == "conscrypt.module.intra.core.api":
             return False
         return True
 
@@ -503,6 +504,10 @@ java_sdk_library_import {{
                     target_dict[sdk_library][scope][target] = scope_json[target]
                 target_paths.append(scope_json["latest_api"])
                 target_paths.append(scope_json["latest_removed_api"])
+                target_paths.append(scope_json["latest_api"]
+                    .replace(".latest", ".latest.extension_version"))
+                target_paths.append(scope_json["latest_removed_api"]
+                    .replace(".latest", ".latest.extension_version"))
 
         return target_paths, target_dict
 
@@ -560,6 +565,7 @@ java_sdk_library_import {{
         with open(
                 sdk_api_diff_file, "w",
                 encoding="utf8") as sdk_api_diff_file_object:
+            last_finalized_version_set = set()
             for sdk_library in target_dict[sdk_info_file]:
                 for scope in target_dict[sdk_info_file][sdk_library]:
                     scope_json = target_dict[sdk_info_file][sdk_library][scope]
@@ -575,6 +581,33 @@ java_sdk_library_import {{
                                           sdk_zip_file, removed_api,
                                           latest_removed_api, snapshots_dir)
 
+                    def read_extension_version(target):
+                        extension_target = target.replace(
+                            ".latest", ".latest.extension_version")
+                        with open(
+                            extension_target, "r", encoding="utf8") as file:
+                            version = int(file.read())
+                            # version equal to -1 means "not an extension version".
+                            if version != -1:
+                                last_finalized_version_set.add(version)
+
+                    read_extension_version(scope_json["latest_api"])
+                    read_extension_version(scope_json["latest_removed_api"])
+
+            if len(last_finalized_version_set) == 0:
+                # Either there is no java sdk library or all java sdk libraries
+                # have not been finalized in sdk extensions yet and hence have
+                # last finalized version set as -1.
+                gantry_metadata_dict["last_finalized_version"] = -1
+            elif len(last_finalized_version_set) == 1:
+                # All java sdk library extension version match.
+                gantry_metadata_dict["last_finalized_version"] =\
+                    last_finalized_version_set.pop()
+            else:
+                # Fail the build
+                raise ValueError(
+                    "Not all sdk libraries finalized with the same version.\n")
+
         gantry_metadata_dict["api_diff_file"] = sdk_api_diff_file.rsplit(
             "/", 1)[-1]
         gantry_metadata_dict["api_diff_file_size"] = os.path.getsize(
@@ -588,6 +621,9 @@ java_sdk_library_import {{
         with open(sdk_metadata_json_file,
                   "w") as gantry_metadata_json_file_object:
             gantry_metadata_json_file_object.write(gantry_metadata_json_object)
+
+        if os.path.getsize(sdk_metadata_json_file) > 1048576: # 1 MB
+            raise ValueError("Metadata file size should not exceed 1 MB.\n")
 
     def get_module_extension_version(self):
         return int(
@@ -745,7 +781,7 @@ R = BuildRelease(
 )
 S = BuildRelease(
     name="S",
-    # Generate a snapshot for S using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
     # This requires the SoongConfigBoilerplateInserter transformation to be
     # applied.
@@ -753,9 +789,16 @@ S = BuildRelease(
 )
 Tiramisu = BuildRelease(
     name="Tiramisu",
-    # Generate a snapshot for Tiramisu using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
-    # This supports the use_source_config_var property.
+    # This build release supports the use_source_config_var property.
+    preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
+)
+UpsideDownCake = BuildRelease(
+    name="UpsideDownCake",
+    # Generate a snapshot for this build release using Soong.
+    creator=create_sdk_snapshots_in_soong,
+    # This build release supports the use_source_config_var property.
     preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
 )
 
@@ -957,9 +1000,14 @@ MAINLINE_MODULES = [
     MainlineModule(
         apex="com.android.btservices",
         sdks=["btservices-module-sdk"],
-        first_release=LATEST,
+        first_release=UpsideDownCake,
         # Bluetooth has always been and is still optional.
         last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.configinfrastructure",
+        sdks=["configinfrastructure-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -973,6 +1021,11 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+    ),
+    MainlineModule(
+        apex="com.android.healthfitness",
+        sdks=["healthfitness-module-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -1020,6 +1073,13 @@ MAINLINE_MODULES = [
         # capable devices it does need to be treated as optional at build time
         # when building non-GMS devices.
         # TODO(b/238203992): remove once all modules are optional at build time.
+        last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.rkpd",
+        sdks=["rkpd-sdk"],
+        first_release=UpsideDownCake,
+        # Rkpd has always been and is still optional.
         last_optional_release=LATEST,
     ),
     MainlineModule(
@@ -1220,6 +1280,13 @@ class SdkDistProducer:
             sdk_dist_module_subdir, "gantry-metadata.json")
         shutil.copy(sdk_gantry_metadata_json_path,
                     sdk_dist_gantry_metadata_json_path)
+
+    def dist_generate_sdk_supported_modules_file(self, modules):
+        sdk_modules_file = os.path.join(self.dist_dir, "sdk-modules.txt")
+        with open(sdk_modules_file, "w", encoding="utf8") as file:
+            for module in modules:
+                if module in MAINLINE_MODULES:
+                    file.write(aosp_to_google_name(module.apex) + "\n")
 
     def populate_unbundled_dist(self, build_release, modules, snapshots_dir):
         build_release_dist_dir = os.path.join(self.mainline_sdks_dir,
@@ -1484,6 +1551,7 @@ def main(args):
         modules += PLATFORM_SDKS_FOR_MAINLINE
 
     producer = create_producer(args.tool_path)
+    producer.dist_generate_sdk_supported_modules_file(modules)
     producer.produce_dist(modules, build_releases)
 
 
