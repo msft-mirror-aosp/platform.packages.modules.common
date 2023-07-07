@@ -622,6 +622,9 @@ java_sdk_library_import {{
                   "w") as gantry_metadata_json_file_object:
             gantry_metadata_json_file_object.write(gantry_metadata_json_object)
 
+        if os.path.getsize(sdk_metadata_json_file) > 1048576: # 1 MB
+            raise ValueError("Metadata file size should not exceed 1 MB.\n")
+
     def get_module_extension_version(self):
         return int(
             subprocess.run([
@@ -778,7 +781,7 @@ R = BuildRelease(
 )
 S = BuildRelease(
     name="S",
-    # Generate a snapshot for S using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
     # This requires the SoongConfigBoilerplateInserter transformation to be
     # applied.
@@ -786,9 +789,16 @@ S = BuildRelease(
 )
 Tiramisu = BuildRelease(
     name="Tiramisu",
-    # Generate a snapshot for Tiramisu using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
-    # This supports the use_source_config_var property.
+    # This build release supports the use_source_config_var property.
+    preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
+)
+UpsideDownCake = BuildRelease(
+    name="UpsideDownCake",
+    # Generate a snapshot for this build release using Soong.
+    creator=create_sdk_snapshots_in_soong,
+    # This build release supports the use_source_config_var property.
     preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
 )
 
@@ -990,9 +1000,14 @@ MAINLINE_MODULES = [
     MainlineModule(
         apex="com.android.btservices",
         sdks=["btservices-module-sdk"],
-        first_release=LATEST,
+        first_release=UpsideDownCake,
         # Bluetooth has always been and is still optional.
         last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.configinfrastructure",
+        sdks=["configinfrastructure-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -1006,6 +1021,11 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+    ),
+    MainlineModule(
+        apex="com.android.healthfitness",
+        sdks=["healthfitness-module-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -1053,6 +1073,13 @@ MAINLINE_MODULES = [
         # capable devices it does need to be treated as optional at build time
         # when building non-GMS devices.
         # TODO(b/238203992): remove once all modules are optional at build time.
+        last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.rkpd",
+        sdks=["rkpd-sdk"],
+        first_release=UpsideDownCake,
+        # Rkpd has always been and is still optional.
         last_optional_release=LATEST,
     ),
     MainlineModule(
