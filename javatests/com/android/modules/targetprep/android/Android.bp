@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,14 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-android_test_helper_app {
-    name: "com.android.modules.updatablesharedlibs.apps.targetTWithLib",
-    srcs: ["UpdatableSharedLibraryTargetTWithLibraryTest.java"],
-    libs: [
-        "com.android.modules.updatablesharedlibs.libs.since.t",
-    ],
-    static_libs: [
-        "androidx.test.rules",
-        "androidx.test.core",
-    ],
-    sdk_version: "current",
-    min_sdk_version: "Tiramisu",
-    target_sdk_version: "Tiramisu",
+java_library {
+    name: "LibraryA",
+    srcs: ["A.java"],
+    installable: true,
+}
+
+java_library {
+    name: "LibraryB",
+    srcs: ["B.java"],
+    installable: true,
 }
