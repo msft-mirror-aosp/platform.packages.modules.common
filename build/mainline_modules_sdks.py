@@ -72,12 +72,12 @@ class FileTransformation:
     # The path of the file within the SDK snapshot zip file.
     path: str
 
-    def apply(self, producer, path):
+    def apply(self, producer, path, build_release):
         """Apply the transformation to the path; changing it in place."""
         with open(path, "r+", encoding="utf8") as file:
-            self._apply_transformation(producer, file)
+            self._apply_transformation(producer, file, build_release)
 
-    def _apply_transformation(self, producer, file):
+    def _apply_transformation(self, producer, file, build_release):
         """Apply the transformation to the file.
 
         The file has been opened in read/write mode so the implementation of
@@ -96,7 +96,7 @@ class SoongConfigVarTransformation(FileTransformation):
     # The line containing the prefer property.
     PREFER_LINE = "    prefer: false,"
 
-    def _apply_transformation(self, producer, file):
+    def _apply_transformation(self, producer, file, build_release):
         raise NotImplementedError
 
 
@@ -117,11 +117,7 @@ class SoongConfigBoilerplateInserter(SoongConfigVarTransformation):
     def config_module_type(self, module_type):
         return self.configModuleTypePrefix + module_type
 
-    def apply(self, producer, path):
-        with open(path, "r+", encoding="utf8") as file:
-            self._apply_transformation(producer, file)
-
-    def _apply_transformation(self, producer, file):
+    def _apply_transformation(self, producer, file, build_release):
         # TODO(b/174997203): Remove this when we have a proper way to control
         #  prefer flags in Mainline modules.
 
@@ -228,7 +224,7 @@ soong_config_module_type {{
 @dataclasses.dataclass(frozen=True)
 class UseSourceConfigVarTransformation(SoongConfigVarTransformation):
 
-    def _apply_transformation(self, producer, file):
+    def _apply_transformation(self, producer, file, build_release):
         lines = []
         for line in file:
             line = line.rstrip("\n")
@@ -273,19 +269,25 @@ class SubprocessRunner:
             *args, check=True, stdout=self.stdout, stderr=self.stderr, **kwargs)
 
 
-def sdk_snapshot_zip_file(snapshots_dir, sdk_name, sdk_version):
+def sdk_snapshot_zip_file(snapshots_dir, sdk_name):
     """Get the path to the sdk snapshot zip file."""
-    return os.path.join(snapshots_dir, f"{sdk_name}-{sdk_version}.zip")
+    return os.path.join(snapshots_dir, f"{sdk_name}-{SDK_VERSION}.zip")
 
 
-def sdk_snapshot_info_file(snapshots_dir, sdk_name, sdk_version):
+def sdk_snapshot_info_file(snapshots_dir, sdk_name):
     """Get the path to the sdk snapshot info file."""
-    return os.path.join(snapshots_dir, f"{sdk_name}-{sdk_version}.info")
+    return os.path.join(snapshots_dir, f"{sdk_name}-{SDK_VERSION}.info")
 
 
-def sdk_snapshot_api_diff_file(snapshots_dir, sdk_name, sdk_version):
+def sdk_snapshot_api_diff_file(snapshots_dir, sdk_name):
     """Get the path to the sdk snapshot api diff file."""
-    return os.path.join(snapshots_dir, f"{sdk_name}-{sdk_version}-api-diff.txt")
+    return os.path.join(snapshots_dir, f"{sdk_name}-{SDK_VERSION}-api-diff.txt")
+
+
+def sdk_snapshot_gantry_metadata_json_file(snapshots_dir, sdk_name):
+    """Get the path to the sdk snapshot gantry metadata json file."""
+    return os.path.join(snapshots_dir,
+                        f"{sdk_name}-{SDK_VERSION}-gantry-metadata.json")
 
 
 # The default time to use in zip entries. Ideally, this should be the same as is
@@ -324,12 +326,12 @@ class SnapshotBuilder:
         self.mainline_sdks_dir = os.path.join(self.out_dir,
                                               "soong/mainline-sdks")
 
-    def get_sdk_path(self, sdk_name, sdk_version):
+    def get_sdk_path(self, sdk_name):
         """Get the path to the sdk snapshot zip file produced by soong"""
         return os.path.join(self.mainline_sdks_dir,
-                            f"{sdk_name}-{sdk_version}.zip")
+                            f"{sdk_name}-{SDK_VERSION}.zip")
 
-    def build_target_paths(self, build_release, sdk_version, target_paths):
+    def build_target_paths(self, build_release, target_paths):
         # Extra environment variables to pass to the build process.
         extraEnv = {
             # TODO(ngeoffray): remove SOONG_ALLOW_MISSING_DEPENDENCIES, but
@@ -338,9 +340,6 @@ class SnapshotBuilder:
             # Set SOONG_SDK_SNAPSHOT_USE_SRCJAR to generate .srcjars inside
             # sdk zip files as expected by prebuilt drop.
             "SOONG_SDK_SNAPSHOT_USE_SRCJAR": "true",
-            # Set SOONG_SDK_SNAPSHOT_VERSION to generate the appropriately
-            # tagged version of the sdk.
-            "SOONG_SDK_SNAPSHOT_VERSION": sdk_version,
         }
         extraEnv.update(build_release.soong_env)
 
@@ -364,24 +363,21 @@ class SnapshotBuilder:
         env.update(extraEnv)
         self.subprocess_runner.run(cmd, env=env)
 
-    def build_snapshots(self, build_release, sdk_versions, modules):
-        # Build the SDKs once for each version.
-        for sdk_version in sdk_versions:
-            # Compute the paths to all the Soong generated sdk snapshot files
-            # required by this script.
-            paths = [
-                sdk_snapshot_zip_file(self.mainline_sdks_dir, sdk, sdk_version)
-                for module in modules
-                for sdk in module.sdks
-            ]
+    def build_snapshots(self, build_release, modules):
+        # Compute the paths to all the Soong generated sdk snapshot files
+        # required by this script.
+        paths = [
+            sdk_snapshot_zip_file(self.mainline_sdks_dir, sdk)
+            for module in modules
+            for sdk in module.sdks
+        ]
 
-            self.build_target_paths(build_release, sdk_version, paths)
+        self.build_target_paths(build_release, paths)
         return self.mainline_sdks_dir
 
-    def build_snapshots_for_build_r(self, build_release, sdk_versions, modules):
+    def build_snapshots_for_build_r(self, build_release, modules):
         # Build the snapshots as standard.
-        snapshot_dir = self.build_snapshots(build_release, sdk_versions,
-                                            modules)
+        snapshot_dir = self.build_snapshots(build_release, modules)
 
         # Each module will extract needed files from the original snapshot zip
         # file and then use that to create a replacement zip file.
@@ -414,8 +410,7 @@ class SnapshotBuilder:
                 for library in module.for_r_build.sdk_libraries:
                     module_name = library.name
                     shared_library = str(library.shared_library).lower()
-                    sdk_file = sdk_snapshot_zip_file(snapshot_dir, sdk_name,
-                                                     "current")
+                    sdk_file = sdk_snapshot_zip_file(snapshot_dir, sdk_name)
                     extract_matching_files_from_zip(
                         sdk_file, dest_dir,
                         sdk_library_files_pattern(
@@ -477,7 +472,8 @@ java_sdk_library_import {{
 
     @staticmethod
     def does_sdk_library_support_latest_api(sdk_library):
-        if sdk_library == "conscrypt.module.platform.api":
+        if sdk_library == "conscrypt.module.platform.api" or \
+            sdk_library == "conscrypt.module.intra.core.api":
             return False
         return True
 
@@ -508,10 +504,14 @@ java_sdk_library_import {{
                     target_dict[sdk_library][scope][target] = scope_json[target]
                 target_paths.append(scope_json["latest_api"])
                 target_paths.append(scope_json["latest_removed_api"])
+                target_paths.append(scope_json["latest_api"]
+                    .replace(".latest", ".latest.extension_version"))
+                target_paths.append(scope_json["latest_removed_api"]
+                    .replace(".latest", ".latest.extension_version"))
 
         return target_paths, target_dict
 
-    def build_sdk_scope_targets(self, build_release, sdk_version, modules):
+    def build_sdk_scope_targets(self, build_release, modules):
         # Build the latest scope targets for each module sdk
         # Compute the paths to all the latest scope targets for each module sdk.
         target_paths = []
@@ -523,11 +523,11 @@ java_sdk_library_import {{
                     continue
 
                 sdk_info_file = sdk_snapshot_info_file(self.mainline_sdks_dir,
-                                                       sdk, sdk_version)
+                                                       sdk)
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
                 target_dict[sdk_info_file] = dict_item
-        self.build_target_paths(build_release, sdk_version, target_paths)
+        self.build_target_paths(build_release, target_paths)
         return target_dict
 
     def appendDiffToFile(self, file_object, sdk_zip_file, current_api,
@@ -541,27 +541,31 @@ java_sdk_library_import {{
             # file). As 0 or 1 are both valid results this cannot use check=True
             # so disable the pylint check.
             # pylint: disable=subprocess-run-check
-            diff = subprocess.run(
-                ["diff", "-u0", latest_api, extracted_current_api, "--label", latest_api, "--label",
-                 extracted_current_api],
-                capture_output=True).stdout.decode("utf-8")
+            diff = subprocess.run([
+                "diff", "-u0", latest_api, extracted_current_api, "--label",
+                latest_api, "--label", extracted_current_api
+            ],
+                                  capture_output=True).stdout.decode("utf-8")
             file_object.write(diff)
 
-    def create_snapshot_api_diff(self, sdk, sdk_version, target_dict,
-                                 snapshots_dir):
-        """Creates api diff files for each module sdk.
+    def create_snapshot_gantry_metadata_and_api_diff(self, sdk, target_dict,
+                                                     snapshots_dir,
+                                                     module_extension_version):
+        """Creates gantry metadata and api diff files for each module sdk.
 
         For each module sdk, the scope targets are obtained for each java sdk
         library and the api diff files are generated by performing a diff
         operation between the current api file vs the latest api file.
         """
-        sdk_info_file = sdk_snapshot_info_file(snapshots_dir, sdk, sdk_version)
-        sdk_zip_file = sdk_snapshot_zip_file(snapshots_dir, sdk, sdk_version)
-        sdk_api_diff_file = sdk_snapshot_api_diff_file(snapshots_dir, sdk,
-                                                       sdk_version)
+        sdk_info_file = sdk_snapshot_info_file(snapshots_dir, sdk)
+        sdk_zip_file = sdk_snapshot_zip_file(snapshots_dir, sdk)
+        sdk_api_diff_file = sdk_snapshot_api_diff_file(snapshots_dir, sdk)
+
+        gantry_metadata_dict = {}
         with open(
                 sdk_api_diff_file, "w",
                 encoding="utf8") as sdk_api_diff_file_object:
+            last_finalized_version_set = set()
             for sdk_library in target_dict[sdk_info_file]:
                 for scope in target_dict[sdk_info_file][sdk_library]:
                     scope_json = target_dict[sdk_info_file][sdk_library][scope]
@@ -577,27 +581,75 @@ java_sdk_library_import {{
                                           sdk_zip_file, removed_api,
                                           latest_removed_api, snapshots_dir)
 
-    def build_snapshot_api_diff(self, sdk_version, modules, target_dict,
-                                snapshots_dir):
-        """For each module sdk, create the api diff file."""
+                    def read_extension_version(target):
+                        extension_target = target.replace(
+                            ".latest", ".latest.extension_version")
+                        with open(
+                            extension_target, "r", encoding="utf8") as file:
+                            version = int(file.read())
+                            # version equal to -1 means "not an extension version".
+                            if version != -1:
+                                last_finalized_version_set.add(version)
+
+                    read_extension_version(scope_json["latest_api"])
+                    read_extension_version(scope_json["latest_removed_api"])
+
+            if len(last_finalized_version_set) == 0:
+                # Either there is no java sdk library or all java sdk libraries
+                # have not been finalized in sdk extensions yet and hence have
+                # last finalized version set as -1.
+                gantry_metadata_dict["last_finalized_version"] = -1
+            elif len(last_finalized_version_set) == 1:
+                # All java sdk library extension version match.
+                gantry_metadata_dict["last_finalized_version"] =\
+                    last_finalized_version_set.pop()
+            else:
+                # Fail the build
+                raise ValueError(
+                    "Not all sdk libraries finalized with the same version.\n")
+
+        gantry_metadata_dict["api_diff_file"] = sdk_api_diff_file.rsplit(
+            "/", 1)[-1]
+        gantry_metadata_dict["api_diff_file_size"] = os.path.getsize(
+            sdk_api_diff_file)
+        gantry_metadata_dict[
+            "module_extension_version"] = module_extension_version
+        sdk_metadata_json_file = sdk_snapshot_gantry_metadata_json_file(
+            snapshots_dir, sdk)
+
+        gantry_metadata_json_object = json.dumps(gantry_metadata_dict, indent=4)
+        with open(sdk_metadata_json_file,
+                  "w") as gantry_metadata_json_file_object:
+            gantry_metadata_json_file_object.write(gantry_metadata_json_object)
+
+        if os.path.getsize(sdk_metadata_json_file) > 1048576: # 1 MB
+            raise ValueError("Metadata file size should not exceed 1 MB.\n")
+
+    def get_module_extension_version(self):
+        return int(
+            subprocess.run([
+                "build/soong/soong_ui.bash", "--dumpvar-mode",
+                "PLATFORM_SDK_EXTENSION_VERSION"
+            ],
+                           capture_output=True).stdout.decode("utf-8").strip())
+
+    def build_snapshot_gantry_metadata_and_api_diff(self, modules, target_dict,
+                                                    snapshots_dir):
+        """For each module sdk, create the metadata and api diff file."""
+        module_extension_version = self.get_module_extension_version()
         for module in modules:
             for sdk in module.sdks:
                 sdk_type = sdk_type_from_name(sdk)
                 if not sdk_type.providesApis:
                     continue
-                self.create_snapshot_api_diff(sdk, sdk_version, target_dict,
-                                              snapshots_dir)
+                self.create_snapshot_gantry_metadata_and_api_diff(
+                    sdk, target_dict, snapshots_dir, module_extension_version)
 
 
-# A list of the sdk versions to build. Usually just current but can include a
-# numeric version too.
-SDK_VERSIONS = [
-    # Suitable for overriding the source modules with prefer:true.
-    # Unlike "unversioned" this mode also adds "@current" suffixed modules
-    # with the same prebuilts (which are never preferred).
-    "current",
-    # Insert additional sdk versions needed for the latest build release.
-]
+# The sdk version to build
+#
+# This is legacy from the time when this could generate versioned sdk snapshots.
+SDK_VERSION = "current"
 
 # The initially empty list of build releases. Every BuildRelease that is created
 # automatically appends itself to this list.
@@ -643,10 +695,6 @@ class BuildRelease:
     #     "SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": <name>,
     # }
     soong_env: typing.Dict[str, str] = None
-
-    # The sdk versions that need to be generated for this build release.
-    sdk_versions: List[str] = \
-        dataclasses.field(default_factory=lambda: SDK_VERSIONS)
 
     # The position of this instance within the BUILD_RELEASES list.
     ordinal: int = dataclasses.field(default=-1, init=False)
@@ -733,7 +781,7 @@ R = BuildRelease(
 )
 S = BuildRelease(
     name="S",
-    # Generate a snapshot for S using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
     # This requires the SoongConfigBoilerplateInserter transformation to be
     # applied.
@@ -741,9 +789,16 @@ S = BuildRelease(
 )
 Tiramisu = BuildRelease(
     name="Tiramisu",
-    # Generate a snapshot for Tiramisu using Soong.
+    # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
-    # This supports the use_source_config_var property.
+    # This build release supports the use_source_config_var property.
+    preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
+)
+UpsideDownCake = BuildRelease(
+    name="UpsideDownCake",
+    # Generate a snapshot for this build release using Soong.
+    creator=create_sdk_snapshots_in_soong,
+    # This build release supports the use_source_config_var property.
     preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
 )
 
@@ -841,6 +896,9 @@ class MainlineModule:
     # Defaults to the last part of the apex name.
     short_name: str = ""
 
+    # Additional transformations
+    additional_transformations: list[FileTransformation] = None
+
     def __post_init__(self):
         # If short_name is not set then set it to the last component of the apex
         # name.
@@ -881,6 +939,9 @@ class MainlineModule:
             transformation = UseSourceConfigVarTransformation(
                 "Android.bp", configVar=config_var)
             transformations.append(transformation)
+
+        if self.additional_transformations and build_release > R:
+            transformations.extend(self.additional_transformations)
 
         return transformations
 
@@ -939,9 +1000,14 @@ MAINLINE_MODULES = [
     MainlineModule(
         apex="com.android.btservices",
         sdks=["btservices-module-sdk"],
-        first_release=LATEST,
+        first_release=UpsideDownCake,
         # Bluetooth has always been and is still optional.
         last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.configinfrastructure",
+        sdks=["configinfrastructure-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -955,6 +1021,11 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+    ),
+    MainlineModule(
+        apex="com.android.healthfitness",
+        sdks=["healthfitness-module-sdk"],
+        first_release=UpsideDownCake,
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -1002,6 +1073,13 @@ MAINLINE_MODULES = [
         # capable devices it does need to be treated as optional at build time
         # when building non-GMS devices.
         # TODO(b/238203992): remove once all modules are optional at build time.
+        last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.rkpd",
+        sdks=["rkpd-sdk"],
+        first_release=UpsideDownCake,
+        # Rkpd has always been and is still optional.
         last_optional_release=LATEST,
     ),
     MainlineModule(
@@ -1156,88 +1234,93 @@ class SdkDistProducer:
         # Although we only need a subset of the files that a java_sdk_library
         # adds to an sdk snapshot generating the whole snapshot is the simplest
         # way to ensure that all the necessary files are produced.
-        sdk_versions = build_release.sdk_versions
 
         # Filter out any modules that do not provide sdk for R.
         modules = [m for m in modules if m.for_r_build]
 
         snapshot_dir = self.snapshot_builder.build_snapshots_for_build_r(
-            build_release, sdk_versions, modules)
-        self.populate_unbundled_dist(build_release, sdk_versions, modules,
-                                     snapshot_dir)
+            build_release, modules)
+        self.populate_unbundled_dist(build_release, modules, snapshot_dir)
 
     def produce_unbundled_dist_for_build_release(self, build_release, modules):
         modules = [m for m in modules if not m.is_bundled()]
-        sdk_versions = build_release.sdk_versions
         snapshots_dir = self.snapshot_builder.build_snapshots(
-            build_release, sdk_versions, modules)
+            build_release, modules)
         if build_release == LATEST:
             target_dict = self.snapshot_builder.build_sdk_scope_targets(
-                build_release, "current", modules)
-            self.snapshot_builder.build_snapshot_api_diff(
-                "current", modules, target_dict, snapshots_dir)
-        self.populate_unbundled_dist(build_release, sdk_versions, modules,
-                                     snapshots_dir)
+                build_release, modules)
+            self.snapshot_builder.build_snapshot_gantry_metadata_and_api_diff(
+                modules, target_dict, snapshots_dir)
+        self.populate_unbundled_dist(build_release, modules, snapshots_dir)
         return snapshots_dir
 
     def produce_bundled_dist_for_build_release(self, build_release, modules):
         modules = [m for m in modules if m.is_bundled()]
         if modules:
-            sdk_versions = build_release.sdk_versions
             snapshots_dir = self.snapshot_builder.build_snapshots(
-                build_release, sdk_versions, modules)
+                build_release, modules)
             self.populate_bundled_dist(build_release, modules, snapshots_dir)
 
-    def dist_sdk_snapshot_api_diff(self, sdk_dist_dir, sdk, sdk_version, module,
-                                   snapshots_dir):
+    def dist_sdk_snapshot_gantry_metadata_and_api_diff(self, sdk_dist_dir, sdk,
+                                                       module, snapshots_dir):
         """Copy the sdk snapshot api diff file to a dist directory."""
         sdk_type = sdk_type_from_name(sdk)
         if not sdk_type.providesApis:
             return
 
-        sdk_dist_subdir = os.path.join(sdk_dist_dir, module.apex, "sdk")
+        sdk_dist_module_subdir = os.path.join(sdk_dist_dir, module.apex)
+        sdk_dist_subdir = os.path.join(sdk_dist_module_subdir, "sdk")
         os.makedirs(sdk_dist_subdir, exist_ok=True)
-        sdk_api_diff_path = sdk_snapshot_api_diff_file(snapshots_dir, sdk,
-                                                       sdk_version)
+        sdk_api_diff_path = sdk_snapshot_api_diff_file(snapshots_dir, sdk)
         shutil.copy(sdk_api_diff_path, sdk_dist_subdir)
 
-    def populate_unbundled_dist(self, build_release, sdk_versions, modules,
-                                snapshots_dir):
+        sdk_gantry_metadata_json_path = sdk_snapshot_gantry_metadata_json_file(
+            snapshots_dir, sdk)
+        sdk_dist_gantry_metadata_json_path = os.path.join(
+            sdk_dist_module_subdir, "gantry-metadata.json")
+        shutil.copy(sdk_gantry_metadata_json_path,
+                    sdk_dist_gantry_metadata_json_path)
+
+    def dist_generate_sdk_supported_modules_file(self, modules):
+        sdk_modules_file = os.path.join(self.dist_dir, "sdk-modules.txt")
+        with open(sdk_modules_file, "w", encoding="utf8") as file:
+            for module in modules:
+                if module in MAINLINE_MODULES:
+                    file.write(aosp_to_google_name(module.apex) + "\n")
+
+    def populate_unbundled_dist(self, build_release, modules, snapshots_dir):
         build_release_dist_dir = os.path.join(self.mainline_sdks_dir,
                                               build_release.sub_dir)
         for module in modules:
-            for sdk_version in sdk_versions:
-                for sdk in module.sdks:
-                    sdk_dist_dir = os.path.join(build_release_dist_dir,
-                                                sdk_version)
-                    if build_release == LATEST:
-                        self.dist_sdk_snapshot_api_diff(sdk_dist_dir, sdk,
-                                                        sdk_version, module,
-                                                        snapshots_dir)
-                    self.populate_dist_snapshot(build_release, module, sdk,
-                                                sdk_dist_dir, sdk_version,
-                                                snapshots_dir)
+            for sdk in module.sdks:
+                sdk_dist_dir = os.path.join(build_release_dist_dir, SDK_VERSION)
+                if build_release == LATEST:
+                    self.dist_sdk_snapshot_gantry_metadata_and_api_diff(
+                        sdk_dist_dir, sdk, module, snapshots_dir)
+                self.populate_dist_snapshot(build_release, module, sdk,
+                                            sdk_dist_dir, snapshots_dir)
 
     def populate_bundled_dist(self, build_release, modules, snapshots_dir):
         sdk_dist_dir = self.bundled_mainline_sdks_dir
         for module in modules:
             for sdk in module.sdks:
                 self.populate_dist_snapshot(build_release, module, sdk,
-                                            sdk_dist_dir, "current",
-                                            snapshots_dir)
+                                            sdk_dist_dir, snapshots_dir)
 
     def populate_dist_snapshot(self, build_release, module, sdk, sdk_dist_dir,
-                               sdk_version, snapshots_dir):
+                               snapshots_dir):
         sdk_type = sdk_type_from_name(sdk)
         subdir = sdk_type.name
 
         sdk_dist_subdir = os.path.join(sdk_dist_dir, module.apex, subdir)
-        sdk_path = sdk_snapshot_zip_file(snapshots_dir, sdk, sdk_version)
+        sdk_path = sdk_snapshot_zip_file(snapshots_dir, sdk)
         sdk_type = sdk_type_from_name(sdk)
         transformations = module.transformations(build_release, sdk_type)
-        self.dist_sdk_snapshot_zip(sdk_path, sdk_dist_subdir, transformations)
+        self.dist_sdk_snapshot_zip(
+            build_release, sdk_path, sdk_dist_subdir, transformations)
 
-    def dist_sdk_snapshot_zip(self, src_sdk_zip, sdk_dist_dir, transformations):
+    def dist_sdk_snapshot_zip(
+        self, build_release, src_sdk_zip, sdk_dist_dir, transformations):
         """Copy the sdk snapshot zip file to a dist directory.
 
         If no transformations are provided then this simply copies the show sdk
@@ -1245,7 +1328,8 @@ class SdkDistProducer:
         provided then the files to be transformed are extracted from the
         snapshot zip file, they are transformed to files in a separate directory
         and then a new zip file is created in the dist directory with the
-        original files replaced by the newly transformed files.
+        original files replaced by the newly transformed files. build_release is
+        provided for transformations if it is needed.
         """
         os.makedirs(sdk_dist_dir, exist_ok=True)
         dest_sdk_zip = os.path.join(sdk_dist_dir, os.path.basename(src_sdk_zip))
@@ -1268,7 +1352,7 @@ class SdkDistProducer:
             extract_matching_files_from_zip(src_sdk_zip, tmp_dir, pattern)
 
             # Apply the transformations to the extracted files in situ.
-            apply_transformations(self, tmp_dir, transformations)
+            apply_transformations(self, tmp_dir, transformations, build_release)
 
             # Replace the original entries in the zip with the transformed
             # files.
@@ -1322,7 +1406,7 @@ def copy_zip_and_replace(producer, src_zip_path, dest_zip_path, src_dir, paths):
         cwd=src_dir)
 
 
-def apply_transformations(producer, tmp_dir, transformations):
+def apply_transformations(producer, tmp_dir, transformations, build_release):
     for transformation in transformations:
         path = os.path.join(tmp_dir, transformation.path)
 
@@ -1330,7 +1414,7 @@ def apply_transformations(producer, tmp_dir, transformations):
         modified = os.path.getmtime(path)
 
         # Transform the file.
-        transformation.apply(producer, path)
+        transformation.apply(producer, path, build_release)
 
         # Reset the timestamp of the file to the original timestamp before the
         # transformation was applied.
@@ -1467,6 +1551,7 @@ def main(args):
         modules += PLATFORM_SDKS_FOR_MAINLINE
 
     producer = create_producer(args.tool_path)
+    producer.dist_generate_sdk_supported_modules_file(modules)
     producer.produce_dist(modules, build_releases)
 
 
