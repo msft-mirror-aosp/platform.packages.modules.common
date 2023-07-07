@@ -19,23 +19,26 @@ package {
 }
 
 java_test_host {
-    name: "ApkInApexTest",
+    name: "ClasspathFetcherTest",
+    test_options: {
+        unit_test: true,
+    },
     srcs: [
-        "ApkInApexTest.java"
-    ],
-    libs: ["tradefed"],
-    java_resources: [
-        ":test_com.android.modules.apkinapex",
+        "ClasspathFetcherTest.java"
     ],
     static_libs: [
-        "compatibility-host-util",
-        "cts-install-lib-host",
-        "frameworks-base-hostutils",
-        "modules-utils-build-testing",
+        "ClasspathFetcher",
+        "mockito-host",
+        "objenesis",
         "truth-prebuilt",
+        "junit",
+        "tradefed",
+    ],
+    java_resources: [
+        ":LibraryA",
+        ":LibraryB",
     ],
     test_suites: [
         "general-tests",
-        "mts-mainline-infra",
     ],
 }

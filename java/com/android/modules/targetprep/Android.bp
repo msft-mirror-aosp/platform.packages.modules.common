@@ -1,10 +1,10 @@
-// Copyright (C) 2021 The Android Open Source Project
+// Copyright (C) 2022 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,16 +15,21 @@
 package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
-
-android_test_helper_app {
-    name: "com.android.modules.updatablesharedlibs.apps.targetT",
-    srcs: ["UpdatableSharedLibraryTargetTTest.java"],
-    static_libs: [
-        "androidx.test.rules",
-        "androidx.test.core",
-        "truth-prebuilt",
+java_library_host {
+    name: "ClasspathFetcher",
+    srcs: ["ClasspathFetcher.java"],
+    libs: [
+        "cts-tradefed",
+        "tradefed",
+        "compatibility-host-util",
+        "androidx.annotation_annotation",
     ],
-    sdk_version: "current",
-    min_sdk_version: "Tiramisu",
-    target_sdk_version: "Tiramisu",
+    static_libs: [
+        "compat-classpaths-testing",
+        "classpath_classes_proto_java"
+    ],
+    visibility: [
+        "//packages/modules/common:__subpackages__",
+        "//packages/modules/SdkExtensions",
+    ],
 }

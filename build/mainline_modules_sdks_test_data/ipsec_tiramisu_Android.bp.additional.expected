@@ -8,7 +8,11 @@ package {
 
 prebuilt_bootclasspath_fragment {
     name: "com.android.ipsec-bootclasspath-fragment",
-    prefer: false,
+    // Do not prefer prebuilt if the Soong config variable "module_build_from_source" in namespace "ANDROID" is true.
+    use_source_config_var: {
+        config_namespace: "ANDROID",
+        var_name: "module_build_from_source",
+    },
     visibility: ["//visibility:public"],
     apex_available: ["com.android.ipsec"],
     licenses: ["ipsec-module-sdk_Android-Apache-2.0"],
@@ -24,7 +28,11 @@ prebuilt_bootclasspath_fragment {
 
 java_sdk_library_import {
     name: "android.net.ipsec.ike",
-    prefer: false,
+    // Do not prefer prebuilt if the Soong config variable "module_build_from_source" in namespace "ANDROID" is true.
+    use_source_config_var: {
+        config_namespace: "ANDROID",
+        var_name: "module_build_from_source",
+    },
     visibility: ["//visibility:public"],
     apex_available: [
         "com.android.ipsec",
@@ -67,3 +75,5 @@ license {
     license_kinds: ["SPDX-license-identifier-Apache-2.0"],
     license_text: ["licenses/build/soong/licenses/LICENSE"],
 }
+
+// Adding by test
