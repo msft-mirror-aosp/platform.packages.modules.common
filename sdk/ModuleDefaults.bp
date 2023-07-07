@@ -229,14 +229,17 @@ java_defaults {
 
 filegroup_defaults {
     name: "framework-sources-module-defaults",
-    visibility: ["//frameworks/base"], // For the "global" stubs
+    visibility: [
+        "//frameworks/base",
+        "//frameworks/base/api",
+    ],
     defaults_visibility: ["//visibility:public"],
 }
 
 // These apex_defaults serve as a common place to add properties which should
 // affect all mainline modules.
 
-APEX_LOWEST_MIN_SDK_VERSION = "29"
+APEX_LOWEST_MIN_SDK_VERSION = "30"
 DCLA_MIN_SDK_VERSION = "31"
 
 apex_defaults {
@@ -248,7 +251,7 @@ apex_defaults {
 apex_defaults {
     name: "q-launched-apex-module",
     defaults: ["any-launched-apex-modules"],
-    min_sdk_version: "29",
+    min_sdk_version: APEX_LOWEST_MIN_SDK_VERSION,
     defaults_visibility: ["//visibility:public"],
 }
 
@@ -310,7 +313,6 @@ apex_defaults {
     name: "s-launched-apex-module",
     defaults: ["any-launched-apex-modules"],
     min_sdk_version: "31",
-    updatable: true,
     // Indicates that pre-installed version of this apex can be compressed.
     // Whether it actually will be compressed is controlled on per-device basis.
     compressible:true,
