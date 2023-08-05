@@ -14,6 +14,7 @@
 # TODO(b/157465465): introduce automated quality signals and remove this list.
 
 android.hardware.audio.common-V1-ndk(minSdkVersion:31)
+android.hardware.audio.common-V2-ndk(minSdkVersion:31)
 android.hardware.audio.common@5.0(minSdkVersion:30)
 android.hardware.bluetooth-V1-ndk(minSdkVersion:33)
 android.hardware.bluetooth.a2dp@1.0(minSdkVersion:30)
@@ -1225,6 +1226,7 @@ SettingsLibRadioButtonPreference(minSdkVersion:21)
 SettingsLibRestrictedLockUtils(minSdkVersion:21)
 SettingsLibSearchWidget(minSdkVersion:21)
 SettingsLibSelectorWithWidgetPreference(minSdkVersion:21)
+SettingsLibSettingsSpinner(minSdkVersion:21)
 SettingsLibSettingsTheme(minSdkVersion:21)
 SettingsLibSettingsTransition(minSdkVersion:29)
 SettingsLibTopIntroPreference(minSdkVersion:21)
