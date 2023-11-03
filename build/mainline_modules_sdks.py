@@ -322,6 +322,9 @@ class SnapshotBuilder:
     # The out/soong/mainline-sdks directory.
     mainline_sdks_dir: str = ""
 
+    # True if apex-allowed-deps-check is to be skipped.
+    skip_allowed_deps_check: bool = False
+
     def __post_init__(self):
         self.mainline_sdks_dir = os.path.join(self.out_dir,
                                               "soong/mainline-sdks")
@@ -356,8 +359,9 @@ class SnapshotBuilder:
             f"TARGET_BUILD_VARIANT={target_build_variant}",
             "TARGET_PRODUCT=mainline_sdk",
             "MODULE_BUILD_FROM_SOURCE=true",
-            "out/soong/apex/depsinfo/new-allowed-deps.txt.check",
         ] + target_paths
+        if not self.skip_allowed_deps_check:
+            cmd += ["apex-allowed-deps-check"]
         print_command(extraEnv, cmd)
         env = os.environ.copy()
         env.update(extraEnv)
@@ -918,8 +922,7 @@ class MainlineModule:
 
         # If the module is optional then it needs its own Soong config
         # variable to allow it to be managed separately from other modules.
-        if (self.last_optional_release and
-                self.last_optional_release > build_release):
+        if self.last_optional_release:
             config_var = ConfigVar(
                 namespace=f"{self.short_name}_module",
                 name="source_build",
@@ -1053,6 +1056,10 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-mediaprovider"),
         ]),
+        # MP is a mandatory mainline module but in some cases (b/294190883) this
+        # needs to be optional for Android Go on T. GTS tests might be needed to
+        # to check the specific condition mentioned in the bug.
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.ondevicepersonalization",
@@ -1421,7 +1428,7 @@ def apply_transformations(producer, tmp_dir, transformations, build_release):
         os.utime(path, (modified, modified))
 
 
-def create_producer(tool_path):
+def create_producer(tool_path, skip_allowed_deps_check):
     # Variables initialized from environment variables that are set by the
     # calling mainline_modules_sdks.sh.
     out_dir = os.environ["OUT_DIR"]
@@ -1436,6 +1443,7 @@ def create_producer(tool_path):
         tool_path=tool_path,
         subprocess_runner=subprocess_runner,
         out_dir=out_dir,
+        skip_allowed_deps_check=skip_allowed_deps_check,
     )
     return SdkDistProducer(
         subprocess_runner=subprocess_runner,
@@ -1531,6 +1539,11 @@ def main(args):
         "Defaults to true when TARGET_BUILD_APPS is not set. "
         "Applicable only if the \"latest\" build release is built.",
     )
+    args_parser.add_argument(
+        "--skip-allowed-deps-check",
+        action="store_true",
+        help="Skip apex-allowed-deps-check.",
+    )
     args = args_parser.parse_args(args)
 
     build_releases = ALL_BUILD_RELEASES
@@ -1550,7 +1563,7 @@ def main(args):
     if not target_build_apps or args.build_platform_sdks_for_mainline:
         modules += PLATFORM_SDKS_FOR_MAINLINE
 
-    producer = create_producer(args.tool_path)
+    producer = create_producer(args.tool_path, args.skip_allowed_deps_check)
     producer.dist_generate_sdk_supported_modules_file(modules)
     producer.produce_dist(modules, build_releases)
 
