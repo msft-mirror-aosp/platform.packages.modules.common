@@ -322,6 +322,9 @@ class SnapshotBuilder:
     # The out/soong/mainline-sdks directory.
     mainline_sdks_dir: str = ""
 
+    # True if apex-allowed-deps-check is to be skipped.
+    skip_allowed_deps_check: bool = False
+
     def __post_init__(self):
         self.mainline_sdks_dir = os.path.join(self.out_dir,
                                               "soong/mainline-sdks")
@@ -356,8 +359,9 @@ class SnapshotBuilder:
             f"TARGET_BUILD_VARIANT={target_build_variant}",
             "TARGET_PRODUCT=mainline_sdk",
             "MODULE_BUILD_FROM_SOURCE=true",
-            "out/soong/apex/depsinfo/new-allowed-deps.txt.check",
         ] + target_paths
+        if not self.skip_allowed_deps_check:
+            cmd += ["apex-allowed-deps-check"]
         print_command(extraEnv, cmd)
         env = os.environ.copy()
         env.update(extraEnv)
@@ -704,6 +708,13 @@ class BuildRelease:
     preferHandling: PreferHandling = \
         PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY
 
+    # Whether the generated snapshots should include flagged APIs. Defaults to
+    # false because flagged APIs are not suitable for use outside Android.
+    include_flagged_apis: bool = False
+
+    # Whether the build release should generate Gantry metadata and API diff.
+    generate_gantry_metadata_and_api_diff: bool = False
+
     def __post_init__(self):
         # The following use object.__setattr__ as this object is frozen and
         # attempting to set the fields directly would cause an exception to be
@@ -724,6 +735,11 @@ class BuildRelease:
                     # snapshot suitable for a specific target build release.
                     "SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": self.name,
                 })
+        # Unless flagged APIs are required to be included in the snapshot then
+        # tell the build to hide them.
+        if not self.include_flagged_apis:
+            self.soong_env["SOONG_SDK_SNAPSHOT_HIDE_FLAGGED_APIS"] = "true"
+
 
     def __eq__(self, other):
         return self.ordinal == other.ordinal
@@ -805,6 +821,16 @@ UpsideDownCake = BuildRelease(
 # Insert additional BuildRelease definitions for following releases here,
 # before LATEST.
 
+# A build release for the latest build excluding flagged apis.
+NEXT = BuildRelease(
+    name="next",
+    creator=create_latest_sdk_snapshots,
+    # There are no build release specific environment variables to pass to
+    # Soong.
+    soong_env={},
+    generate_gantry_metadata_and_api_diff=True,
+)
+
 # The build release for the latest build supported by this build, i.e. the
 # current build. This must be the last BuildRelease defined in this script.
 LATEST = BuildRelease(
@@ -813,6 +839,10 @@ LATEST = BuildRelease(
     # There are no build release specific environment variables to pass to
     # Soong.
     soong_env={},
+    # Latest must include flagged APIs because it may be dropped into the main
+    # Android branches.
+    include_flagged_apis=True,
+    generate_gantry_metadata_and_api_diff=True,
 )
 
 
@@ -918,8 +948,7 @@ class MainlineModule:
 
         # If the module is optional then it needs its own Soong config
         # variable to allow it to be managed separately from other modules.
-        if (self.last_optional_release and
-                self.last_optional_release > build_release):
+        if self.last_optional_release:
             config_var = ConfigVar(
                 namespace=f"{self.short_name}_module",
                 name="source_build",
@@ -977,11 +1006,13 @@ MAINLINE_MODULES = [
         apex="com.android.adservices",
         sdks=["adservices-module-sdk"],
         first_release=Tiramisu,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.appsearch",
         sdks=["appsearch-sdk"],
         first_release=Tiramisu,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.art",
@@ -1008,6 +1039,7 @@ MAINLINE_MODULES = [
         apex="com.android.configinfrastructure",
         sdks=["configinfrastructure-sdk"],
         first_release=UpsideDownCake,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -1021,11 +1053,13 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.healthfitness",
         sdks=["healthfitness-module-sdk"],
         first_release=UpsideDownCake,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -1037,6 +1071,7 @@ MAINLINE_MODULES = [
                 shared_library=True,
             ),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.media",
@@ -1045,6 +1080,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-media"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.mediaprovider",
@@ -1053,11 +1089,16 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-mediaprovider"),
         ]),
+        # MP is a mandatory mainline module but in some cases (b/294190883) this
+        # needs to be optional for Android Go on T. GTS tests might be needed to
+        # to check the specific condition mentioned in the bug.
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.ondevicepersonalization",
         sdks=["ondevicepersonalization-module-sdk"],
         first_release=Tiramisu,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.permission",
@@ -1086,6 +1127,7 @@ MAINLINE_MODULES = [
         apex="com.android.scheduling",
         sdks=["scheduling-sdk"],
         first_release=S,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.sdkext",
@@ -1094,6 +1136,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-sdkextensions"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.os.statsd",
@@ -1102,6 +1145,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-statsd"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.tethering",
@@ -1110,6 +1154,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-tethering"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.uwb",
@@ -1246,7 +1291,7 @@ class SdkDistProducer:
         modules = [m for m in modules if not m.is_bundled()]
         snapshots_dir = self.snapshot_builder.build_snapshots(
             build_release, modules)
-        if build_release == LATEST:
+        if build_release.generate_gantry_metadata_and_api_diff:
             target_dict = self.snapshot_builder.build_sdk_scope_targets(
                 build_release, modules)
             self.snapshot_builder.build_snapshot_gantry_metadata_and_api_diff(
@@ -1283,6 +1328,7 @@ class SdkDistProducer:
 
     def dist_generate_sdk_supported_modules_file(self, modules):
         sdk_modules_file = os.path.join(self.dist_dir, "sdk-modules.txt")
+        os.makedirs(os.path.dirname(sdk_modules_file), exist_ok=True)
         with open(sdk_modules_file, "w", encoding="utf8") as file:
             for module in modules:
                 if module in MAINLINE_MODULES:
@@ -1294,7 +1340,7 @@ class SdkDistProducer:
         for module in modules:
             for sdk in module.sdks:
                 sdk_dist_dir = os.path.join(build_release_dist_dir, SDK_VERSION)
-                if build_release == LATEST:
+                if build_release.generate_gantry_metadata_and_api_diff:
                     self.dist_sdk_snapshot_gantry_metadata_and_api_diff(
                         sdk_dist_dir, sdk, module, snapshots_dir)
                 self.populate_dist_snapshot(build_release, module, sdk,
@@ -1421,7 +1467,7 @@ def apply_transformations(producer, tmp_dir, transformations, build_release):
         os.utime(path, (modified, modified))
 
 
-def create_producer(tool_path):
+def create_producer(tool_path, skip_allowed_deps_check):
     # Variables initialized from environment variables that are set by the
     # calling mainline_modules_sdks.sh.
     out_dir = os.environ["OUT_DIR"]
@@ -1436,6 +1482,7 @@ def create_producer(tool_path):
         tool_path=tool_path,
         subprocess_runner=subprocess_runner,
         out_dir=out_dir,
+        skip_allowed_deps_check=skip_allowed_deps_check,
     )
     return SdkDistProducer(
         subprocess_runner=subprocess_runner,
@@ -1531,6 +1578,11 @@ def main(args):
         "Defaults to true when TARGET_BUILD_APPS is not set. "
         "Applicable only if the \"latest\" build release is built.",
     )
+    args_parser.add_argument(
+        "--skip-allowed-deps-check",
+        action="store_true",
+        help="Skip apex-allowed-deps-check.",
+    )
     args = args_parser.parse_args(args)
 
     build_releases = ALL_BUILD_RELEASES
@@ -1550,7 +1602,7 @@ def main(args):
     if not target_build_apps or args.build_platform_sdks_for_mainline:
         modules += PLATFORM_SDKS_FOR_MAINLINE
 
-    producer = create_producer(args.tool_path)
+    producer = create_producer(args.tool_path, args.skip_allowed_deps_check)
     producer.dist_generate_sdk_supported_modules_file(modules)
     producer.produce_dist(modules, build_releases)
 
