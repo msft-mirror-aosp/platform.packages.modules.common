@@ -8,10 +8,10 @@ package {
 
 prebuilt_bootclasspath_fragment {
     name: "com.android.ipsec-bootclasspath-fragment",
-    // Do not prefer prebuilt if the Soong config variable "module_build_from_source" in namespace "ANDROID" is true.
+    // Do not prefer prebuilt if the Soong config variable "source_build" in namespace "ipsec_module" is true.
     use_source_config_var: {
-        config_namespace: "ANDROID",
-        var_name: "module_build_from_source",
+        config_namespace: "ipsec_module",
+        var_name: "source_build",
     },
     visibility: ["//visibility:public"],
     apex_available: ["com.android.ipsec"],
@@ -28,10 +28,10 @@ prebuilt_bootclasspath_fragment {
 
 java_sdk_library_import {
     name: "android.net.ipsec.ike",
-    // Do not prefer prebuilt if the Soong config variable "module_build_from_source" in namespace "ANDROID" is true.
+    // Do not prefer prebuilt if the Soong config variable "source_build" in namespace "ipsec_module" is true.
     use_source_config_var: {
-        config_namespace: "ANDROID",
-        var_name: "module_build_from_source",
+        config_namespace: "ipsec_module",
+        var_name: "source_build",
     },
     visibility: ["//visibility:public"],
     apex_available: [
