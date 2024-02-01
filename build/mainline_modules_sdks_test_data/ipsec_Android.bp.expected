@@ -4,8 +4,8 @@
 soong_config_module_type {
     name: "ipsec_prebuilt_java_sdk_library_import",
     module_type: "java_sdk_library_import",
-    config_namespace: "ANDROID",
-    bool_variables: ["module_build_from_source"],
+    config_namespace: "ipsec_module",
+    bool_variables: ["source_build"],
     properties: ["prefer"],
 }
 
@@ -13,8 +13,8 @@ soong_config_module_type {
 soong_config_module_type {
     name: "ipsec_prebuilt_prebuilt_bootclasspath_fragment",
     module_type: "prebuilt_bootclasspath_fragment",
-    config_namespace: "ANDROID",
-    bool_variables: ["module_build_from_source"],
+    config_namespace: "ipsec_module",
+    bool_variables: ["source_build"],
     properties: ["prefer"],
 }
 
@@ -26,10 +26,10 @@ package {
 
 ipsec_prebuilt_prebuilt_bootclasspath_fragment {
     name: "com.android.ipsec-bootclasspath-fragment",
-    // Do not prefer prebuilt if the Soong config variable "module_build_from_source" in namespace "ANDROID" is true.
+    // Do not prefer prebuilt if the Soong config variable "source_build" in namespace "ipsec_module" is true.
     prefer: true,
     soong_config_variables: {
-        module_build_from_source: {
+        source_build: {
             prefer: false,
         },
     },
@@ -48,10 +48,10 @@ ipsec_prebuilt_prebuilt_bootclasspath_fragment {
 
 ipsec_prebuilt_java_sdk_library_import {
     name: "android.net.ipsec.ike",
-    // Do not prefer prebuilt if the Soong config variable "module_build_from_source" in namespace "ANDROID" is true.
+    // Do not prefer prebuilt if the Soong config variable "source_build" in namespace "ipsec_module" is true.
     prefer: true,
     soong_config_variables: {
-        module_build_from_source: {
+        source_build: {
             prefer: false,
         },
     },
