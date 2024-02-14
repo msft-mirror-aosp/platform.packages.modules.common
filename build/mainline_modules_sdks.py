@@ -376,7 +376,8 @@ class SnapshotBuilder:
             for sdk in module.sdks
         ]
 
-        self.build_target_paths(build_release, paths)
+        if paths:
+            self.build_target_paths(build_release, paths)
         return self.mainline_sdks_dir
 
     def build_snapshots_for_build_r(self, build_release, modules):
@@ -531,7 +532,8 @@ java_sdk_library_import {{
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
                 target_dict[sdk_info_file] = dict_item
-        self.build_target_paths(build_release, target_paths)
+        if target_paths:
+            self.build_target_paths(build_release, target_paths)
         return target_dict
 
     def appendDiffToFile(self, file_object, sdk_zip_file, current_api,
