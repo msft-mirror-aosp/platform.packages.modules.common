@@ -15,16 +15,17 @@
  */
 
 package {
+    default_team: "trendy_team_mainline_modularization",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
 java_sdk_library {
     name: "com.android.modules.updatablesharedlibs.libs.since.t",
     srcs: [
-        "Api.java"
+        "Api.java",
     ],
-    permitted_packages: [ "com.android.modules.updatablesharedlibs.libs.since"],
-    apex_available: [ "test_com.android.modules.updatablesharedlibs" ],
+    permitted_packages: ["com.android.modules.updatablesharedlibs.libs.since"],
+    apex_available: ["test_com.android.modules.updatablesharedlibs"],
     min_sdk_version: "Tiramisu",
     sdk_version: "current",
     on_bootclasspath_since: "Tiramisu",

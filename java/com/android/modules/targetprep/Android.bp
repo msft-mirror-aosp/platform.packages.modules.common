@@ -13,8 +13,10 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_mainline_modularization",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
+
 java_library_host {
     name: "ClasspathFetcher",
     srcs: ["ClasspathFetcher.java"],
@@ -26,7 +28,7 @@ java_library_host {
     ],
     static_libs: [
         "compat-classpaths-testing",
-        "classpath_classes_proto_java"
+        "classpath_classes_proto_java",
     ],
     visibility: [
         "//packages/modules/common:__subpackages__",
