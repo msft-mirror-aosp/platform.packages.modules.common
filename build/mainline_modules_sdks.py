@@ -376,7 +376,8 @@ class SnapshotBuilder:
             for sdk in module.sdks
         ]
 
-        self.build_target_paths(build_release, paths)
+        if paths:
+            self.build_target_paths(build_release, paths)
         return self.mainline_sdks_dir
 
     def build_snapshots_for_build_r(self, build_release, modules):
@@ -531,7 +532,8 @@ java_sdk_library_import {{
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
                 target_dict[sdk_info_file] = dict_item
-        self.build_target_paths(build_release, target_paths)
+        if target_paths:
+            self.build_target_paths(build_release, target_paths)
         return target_dict
 
     def appendDiffToFile(self, file_object, sdk_zip_file, current_api,
@@ -1006,11 +1008,13 @@ MAINLINE_MODULES = [
         apex="com.android.adservices",
         sdks=["adservices-module-sdk"],
         first_release=Tiramisu,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.appsearch",
         sdks=["appsearch-sdk"],
         first_release=Tiramisu,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.art",
@@ -1037,6 +1041,7 @@ MAINLINE_MODULES = [
         apex="com.android.configinfrastructure",
         sdks=["configinfrastructure-sdk"],
         first_release=UpsideDownCake,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -1050,11 +1055,13 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.healthfitness",
         sdks=["healthfitness-module-sdk"],
         first_release=UpsideDownCake,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -1066,6 +1073,7 @@ MAINLINE_MODULES = [
                 shared_library=True,
             ),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.media",
@@ -1074,6 +1082,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-media"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.mediaprovider",
@@ -1091,6 +1100,7 @@ MAINLINE_MODULES = [
         apex="com.android.ondevicepersonalization",
         sdks=["ondevicepersonalization-module-sdk"],
         first_release=Tiramisu,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.permission",
@@ -1119,6 +1129,7 @@ MAINLINE_MODULES = [
         apex="com.android.scheduling",
         sdks=["scheduling-sdk"],
         first_release=S,
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.sdkext",
@@ -1127,6 +1138,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-sdkextensions"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.os.statsd",
@@ -1135,6 +1147,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-statsd"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.tethering",
@@ -1143,6 +1156,7 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-tethering"),
         ]),
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.uwb",
