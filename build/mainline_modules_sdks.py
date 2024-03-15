@@ -376,7 +376,8 @@ class SnapshotBuilder:
             for sdk in module.sdks
         ]
 
-        self.build_target_paths(build_release, paths)
+        if paths:
+            self.build_target_paths(build_release, paths)
         return self.mainline_sdks_dir
 
     def build_snapshots_for_build_r(self, build_release, modules):
@@ -531,7 +532,8 @@ java_sdk_library_import {{
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
                 target_dict[sdk_info_file] = dict_item
-        self.build_target_paths(build_release, target_paths)
+        if target_paths:
+            self.build_target_paths(build_release, target_paths)
         return target_dict
 
     def appendDiffToFile(self, file_object, sdk_zip_file, current_api,
@@ -1047,6 +1049,14 @@ MAINLINE_MODULES = [
         for_r_build=None,
     ),
     MainlineModule(
+        apex="com.android.devicelock",
+        sdks=["devicelock-module-sdk"],
+        first_release=UpsideDownCake,
+        # Treat DeviceLock as optional at build time
+        # TODO(b/238203992): remove once all modules are optional at build time.
+        last_optional_release=LATEST,
+    ),
+    MainlineModule(
         apex="com.android.healthfitness",
         sdks=["healthfitness-module-sdk"],
         first_release=UpsideDownCake,
@@ -1077,6 +1087,10 @@ MAINLINE_MODULES = [
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-mediaprovider"),
         ]),
+        # MP is a mandatory mainline module but in some cases (b/294190883) this
+        # needs to be optional for Android Go on T. GTS tests might be needed to
+        # to check the specific condition mentioned in the bug.
+        last_optional_release=LATEST,
     ),
     MainlineModule(
         apex="com.android.ondevicepersonalization",
