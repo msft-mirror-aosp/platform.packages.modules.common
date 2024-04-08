@@ -65,7 +65,7 @@ readonly -a DEFAULT_MODULES=(
   test_com.android.media.swcodec
   CaptivePortalLogin
   DocumentsUI
-  ExtServices
+  ExtServices-tplus
   NetworkStack
   NetworkStackNext
   PermissionController
