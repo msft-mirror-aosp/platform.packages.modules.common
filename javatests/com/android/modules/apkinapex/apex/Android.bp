@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Android Open Source Project
+// Copyright (C) 2022 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,25 +17,28 @@ package {
 }
 
 apex_key {
-    name: "com.android.modules.updatablesharedlibs.key",
-    public_key: "com.android.modules.updatablesharedlibs.avbpubkey",
-    private_key: "com.android.modules.updatablesharedlibs.pem",
+    name: "test_com.android.modules.apkinapex.key",
+    public_key: "test_com.android.modules.apkinapex.avbpubkey",
+    private_key: "test_com.android.modules.apkinapex.pem",
 }
 
 android_app_certificate {
-    name: "com.android.modules.updatablesharedlibs.certificate",
-    certificate: "com.android.modules.updatablesharedlibs",
+    name: "test_com.android.modules.apkinapex.certificate",
+    certificate: "test_com.android.modules.apkinapex",
 }
 
 apex_test {
-    name: "test_com.android.modules.updatablesharedlibs",
+    name: "test_com.android.modules.apkinapex",
     manifest: "manifest.json",
     file_contexts: ":apex.test-file_contexts",
-    key: "com.android.modules.updatablesharedlibs.key",
-    java_libs: [
-        "com.android.modules.updatablesharedlibs.libs.before.t",
-        "com.android.modules.updatablesharedlibs.libs.since.t",
-    ],
+    key: "test_com.android.modules.apkinapex.key",
+    certificate: ":test_com.android.modules.apkinapex.certificate",
     updatable: false,
     min_sdk_version: "33",
+    apps: [
+        "com.android.modules.apkinapex.apps.installable",
+        "com.android.modules.apkinapex.apps.futureminsdk",
+        "com.android.modules.apkinapex.apps.futuretargetsdk",
+        "com.android.modules.apkinapex.apps.pastmaxsdk",
+    ],
 }

@@ -22,10 +22,11 @@ COMPAT_README = Path('extensions/README.md')
 BUILD_TARGET_TRAIN = 'train_build'
 # This build target is used when fetching from a non-train build (XXXXXXXX)
 BUILD_TARGET_CONTINUOUS = 'mainline_modules_sdks-userdebug'
+BUILD_TARGET_CONTINUOUS_MAIN = 'mainline_modules_sdks-{release_config}-userdebug'
 # The glob of sdk artifacts to fetch from remote build
-ARTIFACT_PATTERN = 'mainline-sdks/for-latest-build/current/{module_name}/sdk/*.zip'
+ARTIFACT_PATTERN = 'mainline-sdks/for-next-build/current/{module_name}/sdk/*.zip'
 # The glob of sdk artifacts to fetch from local build
-ARTIFACT_LOCAL_PATTERN = 'out/dist/mainline-sdks/for-latest-build/current/{module_name}/sdk/*.zip'
+ARTIFACT_LOCAL_PATTERN = 'out/dist/mainline-sdks/for-next-build/current/{module_name}/sdk/*.zip'
 COMMIT_TEMPLATE = """Finalize artifacts for extension SDK %d
 
 Import from build id %s.
@@ -67,7 +68,6 @@ def repo_for_sdk(filename):
     module = filename.split('-')[0]
     target_dir = ''
     if module == 'btservices': return Path('prebuilts/module_sdk/Bluetooth')
-    if module == 'healthfitness': return Path('prebuilts/module_sdk/HealthConnect')
     if module == 'media': return Path('prebuilts/module_sdk/Media')
     if module == 'rkpd': return Path('prebuilts/module_sdk/RemoteKeyProvisioning')
     if module == 'tethering': return Path('prebuilts/module_sdk/Connectivity')
@@ -114,6 +114,7 @@ if not os.path.isdir('build/soong'):
 
 parser = argparse.ArgumentParser(description=('Finalize an extension SDK with prebuilts'))
 parser.add_argument('-f', '--finalize_sdk', type=int, required=True, help='The numbered SDK to finalize.')
+parser.add_argument('-c', '--release_config', type=str, help='The release config to use to finalize.')
 parser.add_argument('-b', '--bug', type=int, required=True, help='The bug number to add to the commit message.')
 parser.add_argument('-r', '--readme', required=True, help='Version history entry to add to %s' % (COMPAT_REPO / COMPAT_README))
 parser.add_argument('-a', '--amend_last_commit', action="store_true", help='Amend current HEAD commits instead of making new commits.')
@@ -122,6 +123,8 @@ parser.add_argument('-l', '--local_mode', action="store_true", help='Local mode:
 parser.add_argument('bid', help='Build server build ID')
 args = parser.parse_args()
 
+if args.release_config:
+    BUILD_TARGET_CONTINUOUS = BUILD_TARGET_CONTINUOUS_MAIN.format(release_config=args.release_config)
 build_target = BUILD_TARGET_TRAIN if args.bid[0] == 'T' else BUILD_TARGET_CONTINUOUS
 branch_name = 'finalize-%d' % args.finalize_sdk
 cmdline = shlex.join([x for x in sys.argv if x not in ['-a', '--amend_last_commit', '-l', '--local_mode']])

@@ -55,7 +55,6 @@ readonly -a DEFAULT_MODULES=(
   com.android.resolv
   com.android.runtime
   com.android.sdkext
-  com.android.sepolicy
   # TODO(b/210694291): include tethering module in the build
   # com.android.tethering
   com.android.tzdata
@@ -66,7 +65,7 @@ readonly -a DEFAULT_MODULES=(
   test_com.android.media.swcodec
   CaptivePortalLogin
   DocumentsUI
-  ExtServices
+  ExtServices-tplus
   NetworkStack
   NetworkStackNext
   PermissionController
@@ -110,12 +109,13 @@ function init() {
     exit 1
   fi
 
-  declare -grx DIST_DIR="${dist_dir}"
+  DIST_DIR="${dist_dir}"
   declare -grx TARGET_BUILD_APPS="${TARGET_BUILD_APPS:-${DEFAULT_MODULES[*]}}"
   declare -grx TARGET_BUILD_DENSITY="${TARGET_BUILD_DENSITY:-alldpi}"
   declare -grx TARGET_BUILD_TYPE="${TARGET_BUILD_TYPE:-release}"
   declare -grx TARGET_BUILD_VARIANT="${TARGET_BUILD_VARIANT:-user}"
   declare -grx TARGET_PRODUCT="${product}"
+  declare -grx BUILD_PRE_S_APEX="${BUILD_PRE_S_APEX:-false}"
 
   # This script cannot handle compressed apexes
   declare -grx OVERRIDE_PRODUCT_COMPRESSED_APEX=false
@@ -123,6 +123,19 @@ function init() {
   # UNBUNDLED_BUILD_SDKS_FROM_SOURCE defaults to false, which is necessary to
   # use prebuilt SDKs on thin branches that may not have the sources (e.g.
   # frameworks/base).
+}
+
+function build_modules() {
+
+  build/soong/soong_ui.bash --make-mode "$@" \
+    ALWAYS_EMBED_NOTICES=true \
+    MODULE_BUILD_FROM_SOURCE=true \
+    ${extra_build_params} \
+    "${RUN_ERROR_PRONE:+"RUN_ERROR_PRONE=true"}" \
+    "${CHECK_API:+"checkapi"}" \
+    apps_only \
+    dist \
+    lint-check
 }
 
 function main() {
@@ -135,15 +148,7 @@ function main() {
   # the buildbots.
   build/soong/soong_ui.bash --make-mode installclean
 
-  #TODO(b/263406837) remove BUILD_BROKEN_DISABLE_BAZEL, which will enable Bazel builds with --bazel-mode by default
-  build/soong/soong_ui.bash --make-mode "$@" \
-    ALWAYS_EMBED_NOTICES=true \
-    MODULE_BUILD_FROM_SOURCE=true \
-    BUILD_BROKEN_DISABLE_BAZEL=true \
-    "${RUN_ERROR_PRONE:+"RUN_ERROR_PRONE=true"}" \
-    apps_only \
-    dist \
-    lint-check
+  DIST_DIR="${DIST_DIR}" build_modules
 }
 
 init "$@"
