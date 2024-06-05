@@ -771,11 +771,6 @@ class BuildRelease:
                     # snapshot suitable for a specific target build release.
                     "SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": self.name,
                 })
-        # Unless flagged APIs are required to be included in the snapshot then
-        # tell the build to hide them.
-        if not self.include_flagged_apis:
-            self.soong_env["SOONG_SDK_SNAPSHOT_HIDE_FLAGGED_APIS"] = "true"
-
 
     def __eq__(self, other):
         return self.ordinal == other.ordinal
@@ -1089,6 +1084,14 @@ MAINLINE_MODULES = [
         # Conscrypt was updatable in R but the generate_ml_bundle.sh does not
         # appear to generate a snapshot for it.
         for_r_build=None,
+        last_optional_release=LATEST,
+    ),
+    MainlineModule(
+        apex="com.android.devicelock",
+        sdks=["devicelock-module-sdk"],
+        first_release=UpsideDownCake,
+        # Treat DeviceLock as optional at build time
+        # TODO(b/238203992): remove once all modules are optional at build time.
         last_optional_release=LATEST,
     ),
     MainlineModule(
