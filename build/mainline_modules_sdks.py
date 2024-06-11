@@ -1028,6 +1028,10 @@ class MainlineModule:
     # Additional transformations
     additional_transformations: list[FileTransformation] = None
 
+    # The module key of SdkModule Enum defined in
+    # packages/modules/common/proto/sdk.proto.
+    module_proto_key: str = ""
+
     def __post_init__(self):
         # If short_name is not set then set it to the last component of the apex
         # name.
@@ -1109,12 +1113,14 @@ MAINLINE_MODULES = [
         sdks=["adservices-module-sdk"],
         first_release=Tiramisu,
         last_optional_release=LATEST,
+        module_proto_key="AD_SERVICES",
     ),
     MainlineModule(
         apex="com.android.appsearch",
         sdks=["appsearch-sdk"],
         first_release=Tiramisu,
         last_optional_release=LATEST,
+        module_proto_key="APPSEARCH",
     ),
     MainlineModule(
         apex="com.android.art",
@@ -1129,6 +1135,7 @@ MAINLINE_MODULES = [
             namespace="art_module",
             name="source_build",
         ),
+        module_proto_key="ART",
     ),
     MainlineModule(
         apex="com.android.btservices",
@@ -1136,12 +1143,14 @@ MAINLINE_MODULES = [
         first_release=UpsideDownCake,
         # Bluetooth has always been and is still optional.
         last_optional_release=LATEST,
+        module_proto_key="",
     ),
     MainlineModule(
         apex="com.android.configinfrastructure",
         sdks=["configinfrastructure-sdk"],
         first_release=UpsideDownCake,
         last_optional_release=LATEST,
+        module_proto_key="CONFIG_INFRASTRUCTURE",
     ),
     MainlineModule(
         apex="com.android.conscrypt",
@@ -1156,6 +1165,7 @@ MAINLINE_MODULES = [
         # appear to generate a snapshot for it.
         for_r_build=None,
         last_optional_release=LATEST,
+        module_proto_key="CONSCRYPT",
     ),
     MainlineModule(
         apex="com.android.devicelock",
@@ -1164,12 +1174,14 @@ MAINLINE_MODULES = [
         # Treat DeviceLock as optional at build time
         # TODO(b/238203992): remove once all modules are optional at build time.
         last_optional_release=LATEST,
+        module_proto_key="",
     ),
     MainlineModule(
         apex="com.android.healthfitness",
         sdks=["healthfitness-module-sdk"],
         first_release=UpsideDownCake,
         last_optional_release=LATEST,
+        module_proto_key="HEALTH_FITNESS",
     ),
     MainlineModule(
         apex="com.android.ipsec",
@@ -1184,6 +1196,7 @@ MAINLINE_MODULES = [
             ]
         ),
         last_optional_release=LATEST,
+        module_proto_key="IPSEC",
     ),
     MainlineModule(
         apex="com.android.media",
@@ -1195,6 +1208,7 @@ MAINLINE_MODULES = [
             ]
         ),
         last_optional_release=LATEST,
+        module_proto_key="MEDIA",
     ),
     MainlineModule(
         apex="com.android.mediaprovider",
@@ -1209,12 +1223,14 @@ MAINLINE_MODULES = [
         # needs to be optional for Android Go on T. GTS tests might be needed to
         # to check the specific condition mentioned in the bug.
         last_optional_release=LATEST,
+        module_proto_key="MEDIA_PROVIDER",
     ),
     MainlineModule(
         apex="com.android.ondevicepersonalization",
         sdks=["ondevicepersonalization-module-sdk"],
         first_release=Tiramisu,
         last_optional_release=LATEST,
+        module_proto_key="ON_DEVICE_PERSONALIZATION",
     ),
     MainlineModule(
         apex="com.android.permission",
@@ -1233,6 +1249,7 @@ MAINLINE_MODULES = [
         # when building non-GMS devices.
         # TODO(b/238203992): remove once all modules are optional at build time.
         last_optional_release=LATEST,
+        module_proto_key="PERMISSIONS",
     ),
     MainlineModule(
         apex="com.android.rkpd",
@@ -1240,12 +1257,14 @@ MAINLINE_MODULES = [
         first_release=UpsideDownCake,
         # Rkpd has always been and is still optional.
         last_optional_release=LATEST,
+        module_proto_key="",
     ),
     MainlineModule(
         apex="com.android.scheduling",
         sdks=["scheduling-sdk"],
         first_release=S,
         last_optional_release=LATEST,
+        module_proto_key="SCHEDULING",
     ),
     MainlineModule(
         apex="com.android.sdkext",
@@ -1257,6 +1276,7 @@ MAINLINE_MODULES = [
             ]
         ),
         last_optional_release=LATEST,
+        module_proto_key="SDK_EXTENSIONS",
     ),
     MainlineModule(
         apex="com.android.os.statsd",
@@ -1268,6 +1288,7 @@ MAINLINE_MODULES = [
             ]
         ),
         last_optional_release=LATEST,
+        module_proto_key="STATSD",
     ),
     MainlineModule(
         apex="com.android.tethering",
@@ -1279,6 +1300,7 @@ MAINLINE_MODULES = [
             ]
         ),
         last_optional_release=LATEST,
+        module_proto_key="TETHERING",
     ),
     MainlineModule(
         apex="com.android.uwb",
@@ -1286,6 +1308,7 @@ MAINLINE_MODULES = [
         first_release=Tiramisu,
         # Uwb has always been and is still optional.
         last_optional_release=LATEST,
+        module_proto_key="",
     ),
     MainlineModule(
         apex="com.android.wifi",
@@ -1298,6 +1321,7 @@ MAINLINE_MODULES = [
         ),
         # Wifi has always been and is still optional.
         last_optional_release=LATEST,
+        module_proto_key="",
     ),
 ]
 
@@ -1481,12 +1505,14 @@ class SdkDistProducer:
         for module in modules:
             if module not in MAINLINE_MODULES:
                 continue
-
-            module = aosp_to_google_name(module.apex)
-            mainline_modules_info_dict[module] = dict()
-            mainline_modules_info_dict[module]["module_sdk_project"] = (
-                module_sdk_project_for_module(module, root_dir)
+            module_name = aosp_to_google_name(module.apex)
+            mainline_modules_info_dict[module_name] = dict()
+            mainline_modules_info_dict[module_name]["module_sdk_project"] = (
+                module_sdk_project_for_module(module_name, root_dir)
             )
+            mainline_modules_info_dict[module_name][
+                "module_proto_key"
+            ] = module.module_proto_key
 
         with open(mainline_modules_info_file, "w", encoding="utf8") as file:
             json.dump(mainline_modules_info_dict, file, indent=4)
