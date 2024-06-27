@@ -44,6 +44,22 @@ def fail(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
     sys.exit(1)
 
+def fetch_artifacts(build_id, target, artifact_path, dest):
+    print('Fetching %s from %s ...' % (artifact_path, target))
+    fetch_cmd = [FETCH_ARTIFACT]
+    fetch_cmd.extend(['--bid', str(build_id)])
+    fetch_cmd.extend(['--target', target])
+    fetch_cmd.append(artifact_path)
+    fetch_cmd.append(str(dest))
+    print("Running: " + ' '.join(fetch_cmd))
+    try:
+        subprocess.check_output(fetch_cmd, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        fail(
+            'FAIL: Unable to retrieve %s artifact for build ID %s for %s target\n Error: %s'
+            % (artifact_path, build_id, target, e.output.decode())
+        )
+
 def fetch_mainline_modules_info_artifact(target, build_id):
     tmpdir = Path(tempfile.TemporaryDirectory().name)
     tmpdir.mkdir()
@@ -53,23 +69,10 @@ def fetch_mainline_modules_info_artifact(target, build_id):
         shutil.copy(artifact_path, tmpdir)
     else:
         artifact_path = ARTIFACT_MODULES_INFO
-        print('Fetching %s from %s ...' % (artifact_path, target))
-        fetch_cmd = [FETCH_ARTIFACT]
-        fetch_cmd.extend(['--bid', str(build_id)])
-        fetch_cmd.extend(['--target', target])
-        fetch_cmd.append(artifact_path)
-        fetch_cmd.append(str(tmpdir))
-        print("Running: " + ' '.join(fetch_cmd))
-        try:
-            subprocess.check_output(fetch_cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
-            fail(
-                'FAIL: Unable to retrieve %s artifact for build ID %s for %s target'
-                % (artifact_path, build_id, target)
-            )
-    return os.path.join(tmpdir, ARTIFACT_MODULES_INFO)
+        fetch_artifacts(build_id, target, artifact_path, tmpdir)
+    return tmpdir / ARTIFACT_MODULES_INFO
 
-def fetch_artifacts(target, build_id, module_name):
+def fetch_module_sdk_artifacts(target, build_id, module_name):
     tmpdir = Path(tempfile.TemporaryDirectory().name)
     tmpdir.mkdir()
     if args.local_mode:
@@ -79,33 +82,20 @@ def fetch_artifacts(target, build_id, module_name):
             shutil.copy(file, tmpdir)
     else:
         artifact_path = ARTIFACT_PATTERN.format(module_name=module_name)
-        print('Fetching %s from %s ...' % (artifact_path, target))
-        fetch_cmd = [FETCH_ARTIFACT]
-        fetch_cmd.extend(['--bid', str(build_id)])
-        fetch_cmd.extend(['--target', target])
-        fetch_cmd.append(artifact_path)
-        fetch_cmd.append(str(tmpdir))
-        print("Running: " + ' '.join(fetch_cmd))
-        try:
-            subprocess.check_output(fetch_cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
-            fail(
-                "FAIL: Unable to retrieve %s artifact for build ID %s"
-                % (artifact_path, build_id)
-            )
+        fetch_artifacts(build_id, target, artifact_path, tmpdir)
     return tmpdir
 
-def repo_for_sdk(module, mainline_modules_info):
-    if module not in mainline_modules_info:
-        fail(
-            '"%s" module not found "%s" in mainline_modules_info json' % module
-        )
+def repo_for_sdk(sdk_filename, mainline_modules_info):
+    for module in mainline_modules_info:
+        if mainline_modules_info[module]["sdk_name"] in sdk_filename:
+            project_path = Path(mainline_modules_info[module]["module_sdk_project"])
+            if args.gantry_download_dir:
+                project_path = args.gantry_download_dir / project_path
+                os.makedirs(project_path , exist_ok = True, mode = 0o777)
+            print(f"module_sdk_path for {module}: {project_path}")
+            return project_path
 
-    print(
-        f"module_sdk_path for {module}:"
-        f" {mainline_modules_info[module]['module_sdk_project']}"
-    )
-    return Path(mainline_modules_info[module]["module_sdk_project"])
+    fail('"%s" has no valid mapping to any mainline module.' % sdk_filename)
 
 def dir_for_sdk(filename, version):
     base = str(version)
@@ -135,9 +125,6 @@ def maybe_tweak_compat_stem(file):
 
     return file.with_stem(new_stem)
 
-if not os.path.isdir('build/soong'):
-    fail("This script must be run from the top of an Android source tree.")
-
 parser = argparse.ArgumentParser(description=('Finalize an extension SDK with prebuilts'))
 parser.add_argument('-f', '--finalize_sdk', type=int, required=True, help='The numbered SDK to finalize.')
 parser.add_argument('-c', '--release_config', type=str, help='The release config to use to finalize.')
@@ -146,8 +133,13 @@ parser.add_argument('-r', '--readme', required=True, help='Version history entry
 parser.add_argument('-a', '--amend_last_commit', action="store_true", help='Amend current HEAD commits instead of making new commits.')
 parser.add_argument('-m', '--modules', action='append', help='Modules to include. Can be provided multiple times, or not at all for all modules.')
 parser.add_argument('-l', '--local_mode', action="store_true", help='Local mode: use locally built artifacts and don\'t upload the result to Gerrit.')
+# This flag is only required when executed via Gantry. It points to the downloaded directory to be used.
+parser.add_argument('-g', '--gantry_download_dir', type=str, help=argparse.SUPPRESS)
 parser.add_argument('bid', help='Build server build ID')
 args = parser.parse_args()
+
+if not os.path.isdir('build/soong') and not args.gantry_download_dir:
+    fail("This script must be run from the top of an Android source tree.")
 
 if args.release_config:
     BUILD_TARGET_CONTINUOUS = BUILD_TARGET_CONTINUOUS_MAIN.format(release_config=args.release_config)
@@ -157,20 +149,27 @@ cmdline = shlex.join([x for x in sys.argv if x not in ['-a', '--amend_last_commi
 commit_message = COMMIT_TEMPLATE % (args.finalize_sdk, args.bid, cmdline, args.bug)
 module_names = args.modules or ['*']
 
+if args.gantry_download_dir:
+    args.gantry_download_dir = Path(args.gantry_download_dir)
+    COMPAT_REPO = args.gantry_download_dir / COMPAT_REPO
+    FETCH_ARTIFACT = str(args.gantry_download_dir / "fetch_artifact")
+    mainline_modules_info_file = args.gantry_download_dir / ARTIFACT_MODULES_INFO
+else:
+    mainline_modules_info_file = fetch_mainline_modules_info_artifact(build_target, args.bid)
+
 compat_dir = COMPAT_REPO.joinpath('extensions/%d' % args.finalize_sdk)
 if compat_dir.is_dir():
     print('Removing existing dir %s' % compat_dir)
     shutil.rmtree(compat_dir)
 
 created_dirs = defaultdict(set)
-mainline_modules_info_file = fetch_mainline_modules_info_artifact(build_target, args.bid)
 with open(mainline_modules_info_file, "r", encoding="utf8",) as file:
     mainline_modules_info = json.load(file)
 
 for m in module_names:
-    tmpdir = fetch_artifacts(build_target, args.bid, m)
-    repo = repo_for_sdk(m, mainline_modules_info)
+    tmpdir = fetch_module_sdk_artifacts(build_target, args.bid, m)
     for f in tmpdir.iterdir():
+        repo = repo_for_sdk(f.name, mainline_modules_info)
         dir = dir_for_sdk(f.name, args.finalize_sdk)
         target_dir = repo.joinpath(dir)
         if target_dir.is_dir():
@@ -201,6 +200,10 @@ if args.local_mode:
     print('Updated prebuilts using locally built artifacts. Don\'t submit or use for anything besides local testing.')
     sys.exit(0)
 
+# Do not commit any changes when the script is executed via Gantry.
+if args.gantry_download_dir:
+    sys.exit(0)
+
 subprocess.check_output(['repo', 'start', branch_name] + list(created_dirs.keys()))
 print('Running git commit')
 for repo in created_dirs:
@@ -213,7 +216,11 @@ for repo in created_dirs:
         subprocess.check_output(git + ['add', COMPAT_README])
 
     if args.amend_last_commit:
-        change_id = '\n' + re.search(r'Change-Id: [^\\n]+', str(subprocess.check_output(git + ['log', '-1']))).group(0)
+        change_id_match = re.search(r'Change-Id: [^\\n]+', str(subprocess.check_output(git + ['log', '-1'])))
+        if change_id_match:
+            change_id = '\n' + change_id_match.group(0)
+        else:
+            fail('FAIL: Unable to find change_id of the last commit.')
         subprocess.check_output(git + ['commit', '--amend', '-m', commit_message + change_id])
     else:
         subprocess.check_output(git + ['commit', '-m', commit_message])
