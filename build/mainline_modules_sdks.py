@@ -249,6 +249,22 @@ class UseSourceConfigVarTransformation(SoongConfigVarTransformation):
         file.truncate()
         file.write("\n".join(lines) + "\n")
 
+# Removes any lines containing prefer
+@dataclasses.dataclass(frozen=True)
+class UseNoPreferPropertyTransformation(SoongConfigVarTransformation):
+
+    def _apply_transformation(self, producer, file, build_release):
+        lines = []
+        for line in file:
+            line = line.rstrip("\n")
+            if line != self.PREFER_LINE:
+                lines.append(line)
+                continue
+
+        # Overwrite the file with the updated contents.
+        file.seek(0)
+        file.truncate()
+        file.write("\n".join(lines) + "\n")
 
 @dataclasses.dataclass()
 class SubprocessRunner:
@@ -764,6 +780,10 @@ class PreferHandling(enum.Enum):
     # Use the use_source_config_var property added in T.
     USE_SOURCE_CONFIG_VAR_PROPERTY = enum.auto()
 
+    # No prefer in Android.bp file
+    # Starting with V, prebuilts will be enabled using apex_contributions flags.
+    USE_NO_PREFER_PROPERTY = enum.auto()
+
 
 @dataclasses.dataclass(frozen=True)
 @functools.total_ordering
@@ -926,6 +946,10 @@ NEXT = BuildRelease(
     # Soong.
     soong_env={},
     generate_gantry_metadata_and_api_diff=True,
+    # Starting with V, setting `prefer|use_source_config_var` on soong modules
+    # in prebuilts/module_sdk is not necessary.
+    # prebuilts will be enabled using apex_contributions release build flags.
+    preferHandling=PreferHandling.USE_NO_PREFER_PROPERTY,
 )
 
 # The build release for the latest build supported by this build, i.e. the
@@ -940,6 +964,10 @@ LATEST = BuildRelease(
     # Android branches.
     include_flagged_apis=True,
     generate_gantry_metadata_and_api_diff=True,
+    # Starting with V, setting `prefer|use_source_config_var` on soong modules
+    # in prebuilts/module_sdk is not necessary.
+    # prebuilts will be enabled using apex_contributions release build flags.
+    preferHandling=PreferHandling.USE_NO_PREFER_PROPERTY,
 )
 
 
@@ -1071,6 +1099,11 @@ class MainlineModule:
             transformations.append(inserter)
         elif prefer_handling == PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY:
             transformation = UseSourceConfigVarTransformation(
+                "Android.bp", configVar=config_var
+            )
+            transformations.append(transformation)
+        elif prefer_handling == PreferHandling.USE_NO_PREFER_PROPERTY:
+            transformation = UseNoPreferPropertyTransformation(
                 "Android.bp", configVar=config_var
             )
             transformations.append(transformation)
