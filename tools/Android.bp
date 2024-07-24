@@ -15,6 +15,7 @@
  */
 
 package {
+    default_team: "trendy_team_mainline_modularization",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -43,13 +44,13 @@ python_binary_host {
 
 genrule {
     name: "cur_sdkinfo_src",
-    tools: [ "gen_sdkinfo" ],
+    tools: ["gen_sdkinfo"],
     out: ["sdkinfo.pb"],
     product_variables: {
         platform_sdk_extension_version: {
             cmd: "$(location) -v %d -o $(out)",
-        }
-    }
+        },
+    },
 }
 
 prebuilt_etc {

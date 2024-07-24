@@ -15,22 +15,27 @@
 # limitations under the License.
 """Unit tests for mainline_modules_sdks.py."""
 import dataclasses
-import re
-import typing
-from pathlib import Path
+import json
 import os
+from pathlib import Path
+import re
 import shutil
 import tempfile
+import typing
 import unittest
-import zipfile
-import json
 from unittest import mock
+import zipfile
 
 import mainline_modules_sdks as mm
 
 MAINLINE_MODULES_BY_APEX = dict(
-    (m.apex, m) for m in (mm.MAINLINE_MODULES + mm.BUNDLED_MAINLINE_MODULES +
-                          mm.PLATFORM_SDKS_FOR_MAINLINE))
+    (m.apex, m)
+    for m in (
+        mm.MAINLINE_MODULES
+        + mm.BUNDLED_MAINLINE_MODULES
+        + mm.PLATFORM_SDKS_FOR_MAINLINE
+    )
+)
 
 
 @dataclasses.dataclass()
@@ -48,8 +53,10 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
         z.writestr(f"sdk_library/public/{name}-removed.txt", "")
         z.writestr(f"sdk_library/public/{name}.srcjar", "")
         z.writestr(f"sdk_library/public/{name}-stubs.jar", "")
-        z.writestr(f"sdk_library/public/{name}.txt",
-                   "method public int testMethod(int);")
+        z.writestr(
+            f"sdk_library/public/{name}.txt",
+            "method public int testMethod(int);",
+        )
 
     def create_snapshot_file(self, out_dir, name, for_r_build):
         zip_file = Path(mm.sdk_snapshot_zip_file(out_dir, name))
@@ -63,8 +70,11 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                     self.create_sdk_library_files(z, re.sub(r"-.*$", "", name))
 
     def build_snapshots(self, build_release, modules):
-        self.snapshots.append((build_release.name, build_release.soong_env,
-                               [m.apex for m in modules]))
+        self.snapshots.append((
+            build_release.name,
+            build_release.soong_env,
+            [m.apex for m in modules],
+        ))
         # Create input file structure.
         sdks_out_dir = Path(self.mainline_sdks_dir).joinpath("test")
         sdks_out_dir.mkdir(parents=True, exist_ok=True)
@@ -103,8 +113,9 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
 
     def create_snapshot_info_file(self, module, sdk_info_file, sdk):
         if module == MAINLINE_MODULES_BY_APEX["com.android.art"]:
-            self.write_data_to_file(sdk_info_file,
-                                    self.get_art_module_info_file_data(sdk))
+            self.write_data_to_file(
+                sdk_info_file, self.get_art_module_info_file_data(sdk)
+            )
         else:
             # For rest of the modules, generate an empty .info file.
             self.write_data_to_file(sdk_info_file, "[]")
@@ -122,7 +133,8 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
                     continue
 
                 sdk_info_file = mm.sdk_snapshot_info_file(
-                    Path(self.mainline_sdks_dir).joinpath("test"), sdk)
+                    Path(self.mainline_sdks_dir).joinpath("test"), sdk
+                )
                 self.create_snapshot_info_file(module, sdk_info_file, sdk)
                 paths, dict_item = self.latest_api_file_targets(sdk_info_file)
                 target_paths.extend(paths)
@@ -132,9 +144,10 @@ class FakeSnapshotBuilder(mm.SnapshotBuilder):
             os.makedirs(os.path.split(target_path)[0])
             if ".latest.extension_version" in target_path:
                 self.write_data_to_file(
-                    target_path, str(self.get_module_extension_version()))
+                    target_path, str(self.get_module_extension_version())
+                )
             else:
-               self.write_data_to_file(target_path, "")
+                self.write_data_to_file(target_path, "")
 
         return target_dict
 
@@ -147,6 +160,14 @@ class TestProduceDist(unittest.TestCase):
         os.mkdir(self.tmp_out_dir)
         self.tmp_dist_dir = os.path.join(self.tmp_dir, "dist")
         os.mkdir(self.tmp_dist_dir)
+        os.makedirs(
+            os.path.join(self.tmp_dir, "prebuilts/module_sdk/AdServices"),
+            exist_ok=True,
+        )
+        os.makedirs(
+            os.path.join(self.tmp_dir, "prebuilts/module_sdk/Connectivity"),
+            exist_ok=True,
+        )
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -223,39 +244,48 @@ class TestProduceDist(unittest.TestCase):
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current-api-diff.txt",
                 "mainline-sdks/for-latest-build/current/com.google.android.wifi/sdk/wifi-module-sdk-current.zip",
             ],
-            sorted(self.list_files_in_dir(self.tmp_dist_dir)))
+            sorted(self.list_files_in_dir(self.tmp_dist_dir)),
+        )
 
-        r_snaphot_dir = os.path.join(self.tmp_out_dir,
-                                     "soong/mainline-sdks/test/for-R-build")
+        r_snapshot_dir = os.path.join(
+            self.tmp_out_dir, "soong/mainline-sdks/test/for-R-build"
+        )
         aosp_ipsec_r_bp_file = "com.android.ipsec/sdk_library/Android.bp"
-        aosp_tethering_r_bp_file = "com.android.tethering/sdk_library/Android.bp"
-        google_wifi_android_bp = "com.google.android.wifi/sdk_library/Android.bp"
-        self.assertEqual([
-            aosp_ipsec_r_bp_file,
-            "com.android.ipsec/sdk_library/public/android.net.ipsec.ike-removed.txt",
-            "com.android.ipsec/sdk_library/public/android.net.ipsec.ike-stubs.jar",
-            "com.android.ipsec/sdk_library/public/android.net.ipsec.ike.srcjar",
-            "com.android.ipsec/sdk_library/public/android.net.ipsec.ike.txt",
-            "com.android.ipsec/snapshot-creation-build-number.txt",
-            aosp_tethering_r_bp_file,
-            "com.android.tethering/sdk_library/public/framework-tethering-removed.txt",
-            "com.android.tethering/sdk_library/public/framework-tethering-stubs.jar",
-            "com.android.tethering/sdk_library/public/framework-tethering.srcjar",
-            "com.android.tethering/sdk_library/public/framework-tethering.txt",
-            "com.android.tethering/snapshot-creation-build-number.txt",
-            google_wifi_android_bp,
-            "com.google.android.wifi/sdk_library/public/framework-wifi-removed.txt",
-            "com.google.android.wifi/sdk_library/public/framework-wifi-stubs.jar",
-            "com.google.android.wifi/sdk_library/public/framework-wifi.srcjar",
-            "com.google.android.wifi/sdk_library/public/framework-wifi.txt",
-            "com.google.android.wifi/snapshot-creation-build-number.txt",
-            "ipsec-module-sdk-current.zip",
-            "tethering-module-sdk-current.zip",
-            "wifi-module-sdk-current.zip",
-        ], sorted(self.list_files_in_dir(r_snaphot_dir)))
+        aosp_tethering_r_bp_file = (
+            "com.android.tethering/sdk_library/Android.bp"
+        )
+        google_wifi_android_bp = (
+            "com.google.android.wifi/sdk_library/Android.bp"
+        )
+        self.assertEqual(
+            [
+                aosp_ipsec_r_bp_file,
+                "com.android.ipsec/sdk_library/public/android.net.ipsec.ike-removed.txt",
+                "com.android.ipsec/sdk_library/public/android.net.ipsec.ike-stubs.jar",
+                "com.android.ipsec/sdk_library/public/android.net.ipsec.ike.srcjar",
+                "com.android.ipsec/sdk_library/public/android.net.ipsec.ike.txt",
+                "com.android.ipsec/snapshot-creation-build-number.txt",
+                aosp_tethering_r_bp_file,
+                "com.android.tethering/sdk_library/public/framework-tethering-removed.txt",
+                "com.android.tethering/sdk_library/public/framework-tethering-stubs.jar",
+                "com.android.tethering/sdk_library/public/framework-tethering.srcjar",
+                "com.android.tethering/sdk_library/public/framework-tethering.txt",
+                "com.android.tethering/snapshot-creation-build-number.txt",
+                google_wifi_android_bp,
+                "com.google.android.wifi/sdk_library/public/framework-wifi-removed.txt",
+                "com.google.android.wifi/sdk_library/public/framework-wifi-stubs.jar",
+                "com.google.android.wifi/sdk_library/public/framework-wifi.srcjar",
+                "com.google.android.wifi/sdk_library/public/framework-wifi.txt",
+                "com.google.android.wifi/snapshot-creation-build-number.txt",
+                "ipsec-module-sdk-current.zip",
+                "tethering-module-sdk-current.zip",
+                "wifi-module-sdk-current.zip",
+            ],
+            sorted(self.list_files_in_dir(r_snapshot_dir)),
+        )
 
         def read_r_snapshot_contents(path):
-            abs_path = os.path.join(r_snaphot_dir, path)
+            abs_path = os.path.join(r_snapshot_dir, path)
             with open(abs_path, "r", encoding="utf8") as file:
                 return file.read()
 
@@ -284,11 +314,14 @@ class TestProduceDist(unittest.TestCase):
         self.produce_dist(modules, build_releases)
 
         # pylint: disable=line-too-long
-        self.assertEqual([
-            "mainline-sdks/for-S-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
-            "mainline-sdks/for-S-build/current/com.android.art/sdk/art-module-sdk-current.zip",
-            "mainline-sdks/for-S-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
-        ], sorted(self.list_files_in_dir(self.tmp_dist_dir)))
+        self.assertEqual(
+            [
+                "mainline-sdks/for-S-build/current/com.android.art/host-exports/art-module-host-exports-current.zip",
+                "mainline-sdks/for-S-build/current/com.android.art/sdk/art-module-sdk-current.zip",
+                "mainline-sdks/for-S-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
+            ],
+            sorted(self.list_files_in_dir(self.tmp_dist_dir)),
+        )
 
     def test_latest_release(self):
         modules = [
@@ -314,43 +347,51 @@ class TestProduceDist(unittest.TestCase):
                 "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current.zip",
                 "mainline-sdks/for-latest-build/current/com.android.art/test-exports/art-module-test-exports-current.zip",
             ],
-            sorted(self.list_files_in_dir(self.tmp_dist_dir)))
+            sorted(self.list_files_in_dir(self.tmp_dist_dir)),
+        )
 
         art_api_diff_file = os.path.join(
             self.tmp_dist_dir,
-            "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt"
+            "mainline-sdks/for-latest-build/current/com.android.art/sdk/art-module-sdk-current-api-diff.txt",
         )
         self.assertNotEqual(
             os.path.getsize(art_api_diff_file),
             0,
-            msg="Api diff file should not be empty for the art module")
+            msg="Api diff file should not be empty for the art module",
+        )
 
         art_gantry_metadata_json_file = os.path.join(
             self.tmp_dist_dir,
-            "mainline-sdks/for-latest-build/current/com.android.art/gantry-metadata.json"
+            "mainline-sdks/for-latest-build/current/com.android.art/gantry-metadata.json",
         )
 
-        with open(art_gantry_metadata_json_file, "r",
-                  encoding="utf8") as gantry_metadata_json_file_object:
+        with open(
+            art_gantry_metadata_json_file, "r", encoding="utf8"
+        ) as gantry_metadata_json_file_object:
             json_data = json.load(gantry_metadata_json_file_object)
 
         self.assertEqual(
             json_data["api_diff_file"],
             "art-module-sdk-current-api-diff.txt",
-            msg="Incorrect api-diff file name.")
+            msg="Incorrect api-diff file name.",
+        )
         self.assertEqual(
             json_data["api_diff_file_size"],
             267,
-            msg="Incorrect api-diff file size.")
+            msg="Incorrect api-diff file size.",
+        )
         self.assertEqual(
             json_data["module_extension_version"],
             5,
-            msg="The module extension version does not match the expected value."
+            msg=(
+                "The module extension version does not match the expected"
+                " value."
+            ),
         )
         self.assertEqual(
             json_data["last_finalized_version"],
             5,
-            msg="The last finalized version does not match the expected value."
+            msg="The last finalized version does not match the expected value.",
         )
 
     def create_build_number_file(self):
@@ -393,31 +434,34 @@ class TestProduceDist(unittest.TestCase):
         producer.produce_dist(modules, build_releases)
 
         # Check the order in which the snapshots are built.
-        self.assertEqual([
-            (
-                "R",
-                {},
-                ["com.android.ipsec", "com.google.android.wifi"],
-            ),
-            (
-                "latest",
-                {},
-                [
-                    "com.android.art", "com.android.ipsec",
-                    "com.google.android.wifi"
-                ],
-            ),
-            (
-                "S",
-                {
-                    "SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": "S"
-                },
-                [
-                    "com.android.art", "com.android.ipsec",
-                    "com.google.android.wifi"
-                ],
-            ),
-        ], snapshot_builder.snapshots)
+        self.assertEqual(
+            [
+                (
+                    "R",
+                    {},
+                    ["com.android.ipsec", "com.google.android.wifi"],
+                ),
+                (
+                    "latest",
+                    {},
+                    [
+                        "com.android.art",
+                        "com.android.ipsec",
+                        "com.google.android.wifi",
+                    ],
+                ),
+                (
+                    "S",
+                    {"SOONG_SDK_SNAPSHOT_TARGET_BUILD_RELEASE": "S"},
+                    [
+                        "com.android.art",
+                        "com.android.ipsec",
+                        "com.google.android.wifi",
+                    ],
+                ),
+            ],
+            snapshot_builder.snapshots,
+        )
 
     def test_generate_sdk_supported_modules_file(self):
         subprocess_runner = mm.SubprocessRunner()
@@ -425,11 +469,6 @@ class TestProduceDist(unittest.TestCase):
             tool_path="path/to/mainline_modules_sdks.sh",
             subprocess_runner=subprocess_runner,
             out_dir=self.tmp_out_dir,
-        )
-        producer = mm.SdkDistProducer(
-            subprocess_runner=subprocess_runner,
-            snapshot_builder=snapshot_builder,
-            dist_dir=self.tmp_dist_dir,
         )
         producer = mm.SdkDistProducer(
             subprocess_runner=subprocess_runner,
@@ -444,8 +483,11 @@ class TestProduceDist(unittest.TestCase):
             MAINLINE_MODULES_BY_APEX["com.android.mediaprovider"],
         ]
         producer.dist_generate_sdk_supported_modules_file(modules)
-        with open(os.path.join(self.tmp_dist_dir, "sdk-modules.txt"), "r",
-                  encoding="utf8") as sdk_modules_file:
+        with open(
+            os.path.join(self.tmp_dist_dir, "sdk-modules.txt"),
+            "r",
+            encoding="utf8",
+        ) as sdk_modules_file:
             sdk_modules = sdk_modules_file.readlines()
 
         self.assertTrue("com.google.android.adservices\n" in sdk_modules)
@@ -460,14 +502,17 @@ class TestProduceDist(unittest.TestCase):
                 first_release="",
             ),
             mm.MainlineModule(
-                apex="com.android.adbd",
+                apex="com.android.extservices",
                 sdks=[],
                 first_release="",
             ),
         ]
         producer.dist_generate_sdk_supported_modules_file(modules)
-        with open(os.path.join(self.tmp_dist_dir, "sdk-modules.txt"), "r",
-                  encoding="utf8") as sdk_modules_file:
+        with open(
+            os.path.join(self.tmp_dist_dir, "sdk-modules.txt"),
+            "r",
+            encoding="utf8",
+        ) as sdk_modules_file:
             sdk_modules = sdk_modules_file.readlines()
 
         self.assertEqual(len(sdk_modules), 0)
@@ -482,20 +527,71 @@ class TestProduceDist(unittest.TestCase):
                 first_release="",
             ),
             mm.MainlineModule(
-                apex="com.android.adbd",
+                apex="com.android.extservices",
                 sdks=[],
                 first_release="",
             ),
         ]
         producer.dist_generate_sdk_supported_modules_file(modules)
-        with open(os.path.join(self.tmp_dist_dir, "sdk-modules.txt"), "r",
-                  encoding="utf8") as sdk_modules_file:
+        with open(
+            os.path.join(self.tmp_dist_dir, "sdk-modules.txt"),
+            "r",
+            encoding="utf8",
+        ) as sdk_modules_file:
             sdk_modules = sdk_modules_file.readlines()
 
         self.assertTrue("com.google.android.adservices\n" in sdk_modules)
         self.assertTrue("com.google.android.mediaprovider\n" in sdk_modules)
         self.assertFalse("com.google.android.adbd\n" in sdk_modules)
         self.assertFalse("com.google.android.extservices\n" in sdk_modules)
+
+    def test_generate_mainline_modules_info_file(self):
+        subprocess_runner = mm.SubprocessRunner()
+        snapshot_builder = FakeSnapshotBuilder(
+            tool_path="path/to/mainline_modules_sdks.sh",
+            subprocess_runner=subprocess_runner,
+            out_dir=self.tmp_out_dir,
+        )
+        producer = mm.SdkDistProducer(
+            subprocess_runner=subprocess_runner,
+            snapshot_builder=snapshot_builder,
+            dist_dir=self.tmp_dist_dir,
+        )
+
+        modules = [
+            MAINLINE_MODULES_BY_APEX["com.android.adservices"],
+            MAINLINE_MODULES_BY_APEX["com.android.tethering"],
+            mm.MainlineModule(
+                apex="com.android.adbd",
+                sdks=[],
+                first_release="",
+            ),
+        ]
+
+        producer.generate_mainline_modules_info_file(modules, self.tmp_dir)
+        with open(
+            os.path.join(self.tmp_dist_dir, "mainline-modules-info.json"),
+            "r",
+            encoding="utf8",
+        ) as mainline_modules_info_file:
+            mainline_modules_info = json.load(mainline_modules_info_file)
+
+        module_json = mainline_modules_info["com.google.android.adservices"]
+        self.assertEqual(
+            module_json["module_sdk_project"], "prebuilts/module_sdk/AdServices"
+        )
+        self.assertEqual(module_json["module_proto_key"], "AD_SERVICES")
+        self.assertEqual(module_json["sdk_name"], "adservices-module-sdk")
+
+        module_json = mainline_modules_info["com.google.android.tethering"]
+        self.assertEqual(
+            module_json["module_sdk_project"],
+            "prebuilts/module_sdk/Connectivity",
+        )
+        self.assertEqual(module_json["module_proto_key"], "TETHERING")
+        self.assertEqual(module_json["sdk_name"], "tethering-module-sdk")
+
+        self.assertFalse("adbd" in mainline_modules_info)
 
 
 def path_to_test_data(relative_path):
@@ -525,7 +621,9 @@ def read_test_data(relative_path):
 
 class TestAndroidBpTransformations(unittest.TestCase):
 
-    def apply_transformations(self, src, transformations, build_release, expected):
+    def apply_transformations(
+        self, src, transformations, build_release, expected
+    ):
         producer = mm.SdkDistProducer(
             subprocess_runner=mock.Mock(mm.SubprocessRunner),
             snapshot_builder=mock.Mock(mm.SnapshotBuilder),
@@ -538,7 +636,8 @@ class TestAndroidBpTransformations(unittest.TestCase):
                 f.write(src)
 
             mm.apply_transformations(
-                producer, tmp_dir, transformations, build_release)
+                producer, tmp_dir, transformations, build_release
+            )
 
             with open(path, "r", encoding="utf8") as f:
                 result = f.read()
@@ -677,7 +776,8 @@ class TestAndroidBpTransformations(unittest.TestCase):
 
         This uses ipsec as an example of a common case for adding information
         in Android.bp file.
-        This checks will append the information in Android.bp for a regular module.
+        This checks will append the information in Android.bp for a regular
+        module.
         """
 
         @dataclasses.dataclass(frozen=True)
@@ -697,14 +797,18 @@ class TestAndroidBpTransformations(unittest.TestCase):
         src = read_test_data("ipsec_Android.bp.input")
 
         expected = read_test_data(
-            "ipsec_tiramisu_Android.bp.additional.expected")
+            "ipsec_tiramisu_Android.bp.additional.expected"
+        )
         test_transformation = TestTransformation(
-            "Android.bp", test_content="\n// Adding by test")
+            "Android.bp", test_content="\n// Adding by test"
+        )
         module = MAINLINE_MODULES_BY_APEX["com.android.ipsec"]
         module = dataclasses.replace(
-            module, apex=module.apex,
+            module,
+            apex=module.apex,
             first_release=module.first_release,
-            additional_transformations=[test_transformation])
+            additional_transformations=[test_transformation],
+        )
         transformations = module.transformations(mm.Tiramisu, mm.Sdk)
         self.apply_transformations(src, transformations, mm.Tiramisu, expected)
 
@@ -730,8 +834,9 @@ class TestModuleProperties(unittest.TestCase):
                 self.assertFalse(module.is_bundled())
 
     def test_bundled(self):
-        for module in (mm.BUNDLED_MAINLINE_MODULES +
-                       mm.PLATFORM_SDKS_FOR_MAINLINE):
+        for module in (
+            mm.BUNDLED_MAINLINE_MODULES + mm.PLATFORM_SDKS_FOR_MAINLINE
+        ):
             with self.subTest(module=module):
                 self.assertTrue(module.is_bundled())
                 self.assertEqual(module.first_release, mm.LATEST)
