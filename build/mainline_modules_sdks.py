@@ -1036,11 +1036,6 @@ class MainlineModule:
                 "Android.bp", configVar=config_var
             )
             transformations.append(transformation)
-        elif prefer_handling == PreferHandling.USE_NO_PREFER_PROPERTY:
-            transformation = UseNoPreferPropertyTransformation(
-                "Android.bp", configVar=config_var
-            )
-            transformations.append(transformation)
 
         if self.additional_transformations and build_release > R:
             transformations.extend(self.additional_transformations)
