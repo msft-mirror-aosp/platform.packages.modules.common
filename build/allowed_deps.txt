@@ -14,6 +14,7 @@
 # TODO(b/157465465): introduce automated quality signals and remove this list.
 
 aconfig_mediacodec_flags_c_lib(minSdkVersion:30)
+aconfig_storage_file_java(minSdkVersion:29)
 android.app.appfunctions.exported-flags-aconfig-java(minSdkVersion:30)
 android.companion.virtualdevice.flags-aconfig-java-export(minSdkVersion:30)
 android.content.pm.flags-aconfig-java-export(minSdkVersion:30)
@@ -210,6 +211,7 @@ com.uwb.support.multichip(minSdkVersion:30)
 com.uwb.support.oemextension(minSdkVersion:30)
 com.uwb.support.profile(minSdkVersion:30)
 com.uwb.support.radar(minSdkVersion:30)
+configinfra_framework_flags_java_lib(minSdkVersion:34)
 connectivity_native_aidl_interface-V1-java(minSdkVersion:30)
 conscrypt(minSdkVersion:29)
 core-libart(minSdkVersion:31)
