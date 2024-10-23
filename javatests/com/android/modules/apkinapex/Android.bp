@@ -25,7 +25,7 @@ java_test_host {
         "ApkInApexTest.java",
     ],
     libs: ["tradefed"],
-    java_resources: [
+    device_common_java_resources: [
         ":test_com.android.modules.apkinapex",
     ],
     static_libs: [
