@@ -35,7 +35,7 @@ java_test_host {
         "junit",
         "tradefed",
     ],
-    java_resources: [
+    device_common_java_resources: [
         ":LibraryA",
         ":LibraryB",
     ],
