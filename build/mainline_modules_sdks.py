@@ -868,6 +868,18 @@ UpsideDownCake = BuildRelease(
     # This build release supports the use_source_config_var property.
     preferHandling=PreferHandling.USE_SOURCE_CONFIG_VAR_PROPERTY,
 )
+VanillaIceCream = BuildRelease(
+    name="VanillaIceCream",
+    # Generate a snapshot for this build release using Soong.
+    creator=create_sdk_snapshots_in_soong,
+    # There are no build release specific environment variables to pass to
+    # Soong.
+    soong_env={},
+    # Starting with V, setting `prefer|use_source_config_var` on soong modules
+    # in prebuilts/module_sdk is not necessary.
+    # prebuilts will be enabled using apex_contributions release build flags.
+    preferHandling=PreferHandling.USE_NO_PREFER_PROPERTY,
+)
 
 # Insert additional BuildRelease definitions for following releases here,
 # before LATEST.
