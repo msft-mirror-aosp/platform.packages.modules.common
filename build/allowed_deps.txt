@@ -15,6 +15,7 @@
 
 aconfig_mediacodec_flags_c_lib(minSdkVersion:30)
 aconfig_storage_file_java(minSdkVersion:29)
+aconfig_storage_reader_java(minSdkVersion:29)
 android.content.pm.flags-aconfig-java-export(minSdkVersion:30)
 android.hardware.audio.common-V1-ndk(minSdkVersion:31)
 android.hardware.audio.common-V2-ndk(minSdkVersion:31)
