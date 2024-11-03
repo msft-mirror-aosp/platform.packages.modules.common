@@ -15,10 +15,12 @@
 
 aconfig_mediacodec_flags_c_lib(minSdkVersion:30)
 aconfig_storage_file_java(minSdkVersion:29)
+aconfig_storage_reader_java(minSdkVersion:29)
 aconfigd_java_proto_lite_lib(minSdkVersion:34)
 android.app.appfunctions.exported-flags-aconfig-java(minSdkVersion:30)
 android.companion.virtualdevice.flags-aconfig-java-export(minSdkVersion:30)
 android.content.pm.flags-aconfig-java-export(minSdkVersion:30)
+android.crashrecovery.flags-aconfig-java(minSdkVersion:35)
 android.hardware.audio.common-V1-ndk(minSdkVersion:31)
 android.hardware.audio.common-V2-ndk(minSdkVersion:31)
 android.hardware.audio.common-V3-ndk(minSdkVersion:31)
