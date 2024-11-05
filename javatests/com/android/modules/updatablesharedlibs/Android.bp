@@ -25,10 +25,10 @@ java_test_host {
         "UpdatableSharedLibsTest.java",
     ],
     libs: ["tradefed"],
-    java_resources: [
+    device_common_java_resources: [
         ":test_com.android.modules.updatablesharedlibs",
     ],
-    data: [
+    device_common_data: [
         ":com.android.modules.updatablesharedlibs.apps.targetS",
         ":com.android.modules.updatablesharedlibs.apps.targetT",
         ":com.android.modules.updatablesharedlibs.apps.targetTWithLib",
