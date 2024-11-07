@@ -77,7 +77,10 @@ java_defaults {
         ":__pkg__",
         "//frameworks/base/api", // For framework-all
     ],
-    stubs_source_visibility: ["//visibility:private"],
+    stubs_source_visibility: [
+        ":__pkg__",
+        "//frameworks/base/api", // For all-modules-public-stubs-source-exportable
+    ],
 
     defaults_visibility: ["//visibility:private"],
 
