@@ -77,7 +77,10 @@ java_defaults {
         ":__pkg__",
         "//frameworks/base/api", // For framework-all
     ],
-    stubs_source_visibility: ["//visibility:private"],
+    stubs_source_visibility: [
+        ":__pkg__",
+        "//frameworks/base/api", // For all-modules-public-stubs-source-exportable
+    ],
 
     defaults_visibility: ["//visibility:private"],
 
@@ -201,9 +204,9 @@ soong_config_module_type_import {
 library_linking_strategy_apex_defaults {
     name: "q-launched-dcla-enabled-apex-module",
     defaults_visibility: [
-         "//external/conscrypt/apex",
-         "//packages/modules/DnsResolver/apex",
-         "//frameworks/av/apex"
+        "//external/conscrypt/apex",
+        "//packages/modules/DnsResolver/apex",
+        "//frameworks/av/apex",
     ],
     defaults: ["q-launched-apex-module"],
     soong_config_variables: {
@@ -228,8 +231,8 @@ apex_defaults {
 library_linking_strategy_apex_defaults {
     name: "r-launched-dcla-enabled-apex-module",
     defaults_visibility: [
-         "//packages/modules/adb:__subpackages__",
-         "//packages/modules/Connectivity/Tethering/apex",
+        "//packages/modules/adb:__subpackages__",
+        "//packages/modules/Connectivity/Tethering/apex",
     ],
     defaults: ["r-launched-apex-module"],
     soong_config_variables: {
@@ -250,7 +253,7 @@ apex_defaults {
     min_sdk_version: "31",
     // Indicates that pre-installed version of this apex can be compressed.
     // Whether it actually will be compressed is controlled on per-device basis.
-    compressible:true,
+    compressible: true,
     defaults_visibility: [
         "//art:__subpackages__",
         "//packages/modules:__subpackages__",
@@ -300,7 +303,7 @@ apex_defaults {
 library_linking_strategy_cc_defaults {
     name: "apex-lowest-min-sdk-version",
     defaults_visibility: [
-         "//system/core/libutils:__subpackages__",
+        "//system/core/libutils:__subpackages__",
     ],
     min_sdk_version: APEX_LOWEST_MIN_SDK_VERSION,
     soong_config_variables: {
