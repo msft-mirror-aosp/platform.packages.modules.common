@@ -334,6 +334,8 @@ def module_sdk_project_for_module(module, root_dir):
         return "prebuilts/module_sdk/Bluetooth"
     if module == "media":
         return "prebuilts/module_sdk/Media"
+    if module == "nfcservices":
+        return "prebuilts/module_sdk/Nfc"
     if module == "rkpd":
         return "prebuilts/module_sdk/RemoteKeyProvisioning"
     if module == "tethering":
@@ -880,6 +882,18 @@ VanillaIceCream = BuildRelease(
     # prebuilts will be enabled using apex_contributions release build flags.
     preferHandling=PreferHandling.USE_NO_PREFER_PROPERTY,
 )
+Baklava = BuildRelease(
+    name="Baklava",
+    # Generate a snapshot for this build release using Soong.
+    creator=create_sdk_snapshots_in_soong,
+    # There are no build release specific environment variables to pass to
+    # Soong.
+    soong_env={},
+    # Starting with V, setting `prefer|use_source_config_var` on soong modules
+    # in prebuilts/module_sdk is not necessary.
+    # prebuilts will be enabled using apex_contributions release build flags.
+    preferHandling=PreferHandling.USE_NO_PREFER_PROPERTY,
+)
 
 # Insert additional BuildRelease definitions for following releases here,
 # before LATEST.
@@ -1192,6 +1206,14 @@ MAINLINE_MODULES = [
         # to check the specific condition mentioned in the bug.
         last_optional_release=LATEST,
         module_proto_key="MEDIA_PROVIDER",
+    ),
+    MainlineModule(
+        apex="com.android.nfcservices",
+        sdks=["nfcservices-module-sdk"],
+        first_release=Baklava,
+        # NFC is optional.
+        last_optional_release=LATEST,
+        module_proto_key="",
     ),
     MainlineModule(
         apex="com.android.ondevicepersonalization",
