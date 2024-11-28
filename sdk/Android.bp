@@ -298,7 +298,11 @@ apex_defaults {
     // Indicates that pre-installed version of this apex can be compressed.
     // Whether it actually will be compressed is controlled on per-device basis.
     compressible: true,
-    defaults_visibility: ["//packages/modules:__subpackages__"],
+    defaults_visibility: [
+        "//packages/modules:__subpackages__",
+        // TODO(b/367426693): Remove this once NFC codebase is moved.
+        "//packages/apps/Nfc:__subpackages__",
+    ],
 }
 
 library_linking_strategy_cc_defaults {
