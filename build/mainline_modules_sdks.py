@@ -1126,10 +1126,10 @@ MAINLINE_MODULES = [
         module_proto_key="ART",
     ),
     MainlineModule(
-        apex="com.android.btservices",
-        sdks=["btservices-module-sdk"],
-        first_release=UpsideDownCake,
-        # Bluetooth has always been and is still optional.
+        apex="com.android.bt",
+        sdks=["bt-module-sdk"],
+        first_release=Baklava,
+        # Bluetooth is optional.
         last_optional_release=LATEST,
         module_proto_key="",
     ),
