@@ -330,7 +330,7 @@ def module_sdk_project_for_module(module, root_dir):
     # art, hence adding special case for art.
     if module == "art":
         return "prebuilts/module_sdk/art"
-    if module == "btservices":
+    if module == "bt":
         return "prebuilts/module_sdk/Bluetooth"
     if module == "media":
         return "prebuilts/module_sdk/Media"
@@ -1062,11 +1062,6 @@ class MainlineModule:
                 "Android.bp", configVar=config_var
             )
             transformations.append(transformation)
-        elif prefer_handling == PreferHandling.USE_NO_PREFER_PROPERTY:
-            transformation = UseNoPreferPropertyTransformation(
-                "Android.bp", configVar=config_var
-            )
-            transformations.append(transformation)
 
         if self.additional_transformations and build_release > R:
             transformations.extend(self.additional_transformations)
@@ -1131,10 +1126,10 @@ MAINLINE_MODULES = [
         module_proto_key="ART",
     ),
     MainlineModule(
-        apex="com.android.btservices",
-        sdks=["btservices-module-sdk"],
-        first_release=UpsideDownCake,
-        # Bluetooth has always been and is still optional.
+        apex="com.android.bt",
+        sdks=["bt-module-sdk"],
+        first_release=Baklava,
+        # Bluetooth is optional.
         last_optional_release=LATEST,
         module_proto_key="",
     ),
