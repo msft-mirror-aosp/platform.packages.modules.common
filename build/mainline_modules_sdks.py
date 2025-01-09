@@ -1247,6 +1247,14 @@ MAINLINE_MODULES = [
         module_proto_key="PERMISSIONS",
     ),
     MainlineModule(
+        apex="com.android.profiling",
+        sdks=["profiling-module-sdk"],
+        first_release=Baklava,
+        # Profiling is optional.
+        last_optional_release=LATEST,
+        module_proto_key="",
+    ),
+    MainlineModule(
         apex="com.android.rkpd",
         sdks=["rkpd-sdk"],
         first_release=UpsideDownCake,
