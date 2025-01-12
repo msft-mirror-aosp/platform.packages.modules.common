@@ -1156,6 +1156,13 @@ MAINLINE_MODULES = [
         module_proto_key="CONSCRYPT",
     ),
     MainlineModule(
+        apex="com.android.crashrecovery",
+        sdks=["crashrecovery-sdk"],
+        first_release=Baklava,
+        last_optional_release=LATEST,
+        module_proto_key="",
+    ),
+    MainlineModule(
         apex="com.android.devicelock",
         sdks=["devicelock-module-sdk"],
         first_release=UpsideDownCake,
