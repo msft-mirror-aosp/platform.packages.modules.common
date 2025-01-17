@@ -16,6 +16,7 @@
 # go/keep-sorted start case=no
 aconfig_mediacodec_flags_c_lib(minSdkVersion:30)
 aconfig_settingslib_exported_flags_java_lib(minSdkVersion:30)
+aconfig_settingstheme_exported_flags_java_lib(minSdkVersion:21)
 aconfig_storage_file_java(minSdkVersion:29)
 aconfig_storage_reader_java(minSdkVersion:29)
 aconfigd-mainline(minSdkVersion:34)
