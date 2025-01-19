@@ -42,6 +42,13 @@ python_binary_host {
     libs: ["sdk_proto_python"],
 }
 
+python_binary_host {
+    name: "check_derive_classpath",
+    defaults: ["modules-common-tools-python-defaults"],
+    srcs: ["check_derive_classpath.py"],
+    libs: ["classpaths_proto_python"],
+}
+
 genrule {
     name: "cur_sdkinfo_src",
     tools: ["gen_sdkinfo"],
