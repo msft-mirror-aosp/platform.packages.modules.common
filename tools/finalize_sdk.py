@@ -126,15 +126,16 @@ def maybe_tweak_compat_stem(file):
     return file.with_stem(new_stem)
 
 parser = argparse.ArgumentParser(description=('Finalize an extension SDK with prebuilts'))
-parser.add_argument('-f', '--finalize_sdk', type=int, required=True, help='The numbered SDK to finalize.')
-parser.add_argument('-c', '--release_config', type=str, help='The release config to use to finalize.')
-parser.add_argument('-b', '--bug', type=int, required=True, help='The bug number to add to the commit message.')
-parser.add_argument('-r', '--readme', required=True, help='Version history entry to add to %s' % (COMPAT_REPO / COMPAT_README))
 parser.add_argument('-a', '--amend_last_commit', action="store_true", help='Amend current HEAD commits instead of making new commits.')
-parser.add_argument('-m', '--modules', action='append', help='Modules to include. Can be provided multiple times, or not at all for all modules.')
-parser.add_argument('-l', '--local_mode', action="store_true", help='Local mode: use locally built artifacts and don\'t upload the result to Gerrit.')
+parser.add_argument('-b', '--bug', type=int, required=True, help='The bug number to add to the commit message.')
+parser.add_argument('-c', '--release_config', type=str, help='The release config to use to finalize.')
+parser.add_argument('-d', '--dry_run', action='store_true', help='Leaves git and repo out it')
+parser.add_argument('-f', '--finalize_sdk', type=int, required=True, help='The numbered SDK to finalize.')
 # This flag is only required when executed via Gantry. It points to the downloaded directory to be used.
 parser.add_argument('-g', '--gantry_download_dir', type=str, help=argparse.SUPPRESS)
+parser.add_argument('-l', '--local_mode', action="store_true", help='Local mode: use locally built artifacts and don\'t upload the result to Gerrit.')
+parser.add_argument('-m', '--modules', action='append', help='Modules to include. Can be provided multiple times, or not at all for all modules.')
+parser.add_argument('-r', '--readme', required=True, help='Version history entry to add to %s' % (COMPAT_REPO / COMPAT_README))
 parser.add_argument('bid', help='Build server build ID')
 args = parser.parse_args()
 
@@ -204,6 +205,9 @@ if args.local_mode:
 
 # Do not commit any changes when the script is executed via Gantry.
 if args.gantry_download_dir:
+    sys.exit(0)
+
+if args.dry_run:
     sys.exit(0)
 
 subprocess.check_output(['repo', 'start', branch_name] + list(created_dirs.keys()))
