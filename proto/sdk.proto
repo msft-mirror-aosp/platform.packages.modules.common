@@ -61,6 +61,9 @@ enum SdkModule {
 
   // V modules
   // No new modules introduced in V
+
+  // B Modules
+  NEURAL_NETWORKS = 17;
 }
 
 // A single extension version.

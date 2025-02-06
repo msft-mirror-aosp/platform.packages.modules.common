@@ -1156,6 +1156,13 @@ MAINLINE_MODULES = [
         module_proto_key="CONSCRYPT",
     ),
     MainlineModule(
+        apex="com.android.crashrecovery",
+        sdks=["crashrecovery-sdk"],
+        first_release=Baklava,
+        last_optional_release=LATEST,
+        module_proto_key="",
+    ),
+    MainlineModule(
         apex="com.android.devicelock",
         sdks=["devicelock-module-sdk"],
         first_release=UpsideDownCake,
@@ -1238,6 +1245,14 @@ MAINLINE_MODULES = [
         # TODO(b/238203992): remove once all modules are optional at build time.
         last_optional_release=LATEST,
         module_proto_key="PERMISSIONS",
+    ),
+    MainlineModule(
+        apex="com.android.profiling",
+        sdks=["profiling-module-sdk"],
+        first_release=Baklava,
+        # Profiling is optional.
+        last_optional_release=LATEST,
+        module_proto_key="",
     ),
     MainlineModule(
         apex="com.android.rkpd",
