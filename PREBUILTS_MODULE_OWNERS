@@ -9,7 +9,9 @@
 #
 # See go/mainline-owners-policy for more details.
 
+include platform/frameworks/base:/SDK_OWNERS
 include platform/packages/modules/common:/MODULES_OWNERS
+
 marielos@google.com #{LAST_RESORT_SUGGESTION}
 robojoe@google.com #{LAST_RESORT_SUGGESTION}
 andyq@google.com #{LAST_RESORT_SUGGESTION}
