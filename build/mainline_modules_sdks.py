@@ -1263,7 +1263,10 @@ MAINLINE_MODULES = [
     ),
     MainlineModule(
         apex="com.android.sdkext",
-        sdks=["sdkextensions-sdk"],
+        sdks=[
+            "sdkextensions-sdk",
+            "sdkextensions-host-exports",
+        ],
         first_release=R,
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-sdkextensions"),
