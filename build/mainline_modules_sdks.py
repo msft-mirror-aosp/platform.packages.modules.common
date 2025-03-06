@@ -874,6 +874,9 @@ VanillaIceCream = BuildRelease(
     name="VanillaIceCream",
     # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
+    # There are no build release specific environment variables to pass to
+    # Soong.
+    soong_env={},
     # Starting with V, setting `prefer|use_source_config_var` on soong modules
     # in prebuilts/module_sdk is not necessary.
     # prebuilts will be enabled using apex_contributions release build flags.
@@ -883,6 +886,9 @@ Baklava = BuildRelease(
     name="Baklava",
     # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
+    # There are no build release specific environment variables to pass to
+    # Soong.
+    soong_env={},
     # Starting with V, setting `prefer|use_source_config_var` on soong modules
     # in prebuilts/module_sdk is not necessary.
     # prebuilts will be enabled using apex_contributions release build flags.
