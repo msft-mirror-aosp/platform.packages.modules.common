@@ -874,9 +874,6 @@ VanillaIceCream = BuildRelease(
     name="VanillaIceCream",
     # Generate a snapshot for this build release using Soong.
     creator=create_sdk_snapshots_in_soong,
-    # There are no build release specific environment variables to pass to
-    # Soong.
-    soong_env={},
     # Starting with V, setting `prefer|use_source_config_var` on soong modules
     # in prebuilts/module_sdk is not necessary.
     # prebuilts will be enabled using apex_contributions release build flags.
@@ -1263,7 +1260,10 @@ MAINLINE_MODULES = [
     ),
     MainlineModule(
         apex="com.android.sdkext",
-        sdks=["sdkextensions-sdk"],
+        sdks=[
+            "sdkextensions-sdk",
+            "sdkextensions-host-exports",
+        ],
         first_release=R,
         for_r_build=ForRBuild(sdk_libraries=[
             SdkLibrary(name="framework-sdkextensions"),
@@ -1518,9 +1518,12 @@ class SdkDistProducer:
         sdk_type = sdk_type_from_name(sdk)
         subdir = sdk_type.name
 
+        # HostExports are not needed for R.
+        if build_release == R and sdk_type == HostExports:
+            return
+
         sdk_dist_subdir = os.path.join(sdk_dist_dir, module.apex, subdir)
         sdk_path = sdk_snapshot_zip_file(snapshots_dir, sdk)
-        sdk_type = sdk_type_from_name(sdk)
         transformations = module.transformations(build_release, sdk_type)
         self.dist_sdk_snapshot_zip(
             build_release, sdk_path, sdk_dist_subdir, transformations)
